@@ -1,8 +1,8 @@
 // 🌐 إعداد Supabase
-const SUPABASE_URL = "https://hmamaaqtnzevrrmgtgxk.supabase.co";
-const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImhtYW1hYXF0bnpldnJybWd0Z3hrIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjIzNTgzMDAsImV4cCI6MjA3NzkzNDMwMH0.tk_S2URpkYvf8xnsPJl3Dqh4jzKwhVm0alWl8oHo-SE";
+const SUPABASE_URL = "https://YOUR_SUPABASE_PROJECT.supabase.co";
+const SUPABASE_ANON_KEY = "YOUR_PUBLIC_ANON_KEY";
 
-// 🌐 رابط Google Apps Script Web App (للملفات مثلاً)
+// 🌐 رابط Google Apps Script Web App (الذي يتعامل مع ملفات JSON)
 const TERMINAL_API_URL = "https://script.google.com/macros/s/AKfycbwHEpFkBld76EVE6kBTeqkn2ShdS_cSqnBU1ue1QwrCO1JSGrC3kMpGrbFt6mqcNQgg/exec";
 
 // ⚡ تهيئة الترمنال
@@ -12,7 +12,7 @@ const term = new Terminal({
 });
 term.open(document.getElementById('terminal'));
 
-// 🎨 المستويات اللونية
+// المستويات اللونية
 const roles = {
   user: '#00ff00',
   admin: '#ffaa00',
@@ -20,14 +20,6 @@ const roles = {
 };
 
 let currentRole = 'user';
-
-// ---------------------------------------------
-// مهم: لا نعرّف COMMANDS هنا كي لا نسبب تكراراً.
-// نقرأ الأوامر من مصدر خارجي (commands.js) عبر CMD.
-// ---------------------------------------------
-const CMD = (typeof window !== 'undefined' && window.COMMANDS)
-  ? window.COMMANDS
-  : (typeof COMMANDS !== 'undefined' ? COMMANDS : {});
 
 // كتابة الموجه
 function writePrompt() {
@@ -66,11 +58,11 @@ term.onData(async (data) => {
   }
 });
 
-// تنفيذ الأوامر (يستخدم CMD بدلاً من COMMANDS المباشر)
+// تنفيذ الأوامر
 async function handleCommand(cmd) {
   if (!cmd) return;
   const [command, ...args] = cmd.split(' ');
-  const cmdObj = CMD[command];
+  const cmdObj = COMMANDS[command];
   if (!cmdObj) {
     term.writeln(`❌ Unknown command: ${command}`);
     return;
