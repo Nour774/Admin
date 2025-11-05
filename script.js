@@ -35,7 +35,7 @@ function hexToRgb(hex) {
 }
 
 // بدء الترمنال
-term.writeln("🟢 AdminShell v1.1");
+term.writeln("🟢 AdminShell v1.0");
 term.writeln("Type 'help' for available commands.");
 writePrompt();
 
