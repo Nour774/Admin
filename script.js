@@ -20,9 +20,16 @@ const roles = {
 };
 
 let currentRole = 'user';
-let inputEnabled = true; // 🔐 يتحكم في السماح بالكتابة أثناء إدخال كلمة مرور
 
-// ✳️ كتابة الموجه
+// ---------------------------------------------
+// مهم: لا نعرّف COMMANDS هنا كي لا نسبب تكراراً.
+// نقرأ الأوامر من مصدر خارجي (commands.js) عبر CMD.
+// ---------------------------------------------
+const CMD = (typeof window !== 'undefined' && window.COMMANDS)
+  ? window.COMMANDS
+  : (typeof COMMANDS !== 'undefined' ? COMMANDS : {});
+
+// كتابة الموجه
 function writePrompt() {
   const color = roles[currentRole];
   term.write(`\r\n\x1b[38;2;${hexToRgb(color)}m${currentRole}@system:${currentRole === 'user' ? '~$' : '~#'} \x1b[0m`);
@@ -39,66 +46,31 @@ term.writeln("🟢 AdminShell v1.0");
 term.writeln("Type 'help' for available commands.");
 writePrompt();
 
-// 🔁 قراءة الأوامر
+// قراءة الأوامر
 let buffer = '';
 term.onData(async (data) => {
-  if (!inputEnabled) return; // ⚠️ تجاهل الإدخال أثناء انتظار كلمة مرور
-
-  const code = data.charCodeAt(0);
-
-  if (code === 13) { // Enter
+  if (data.charCodeAt(0) === 13) { // Enter
     term.writeln('');
     const cmd = buffer.trim();
     buffer = '';
     await handleCommand(cmd);
     writePrompt();
-
-  } else if (code === 127) { // Backspace
+  } else if (data.charCodeAt(0) === 127) { // Backspace
     if (buffer.length > 0) {
       buffer = buffer.slice(0, -1);
       term.write('\b \b');
     }
-
   } else {
     buffer += data;
     term.write(data);
   }
 });
 
-// 🧩 أوامر النظام
-const COMMANDS = {
-  help: {
-    description: "عرض قائمة الأوامر المتاحة",
-    action: async () => {
-      return "Available commands:\n - help\n - sudo\n - clear";
-    },
-  },
-  clear: {
-    description: "مسح الشاشة",
-    action: async () => {
-      term.clear();
-      return "🧹 Screen cleared.";
-    },
-  },
-  sudo: {
-    description: "ترقية الصلاحيات إلى admin",
-    action: async ({ switchRole }) => {
-      await switchRole('admin');
-    },
-  },
-  su: {
-    description: "تبديل المستخدم إلى root",
-    action: async ({ switchRole }) => {
-      await switchRole('root');
-    },
-  },
-};
-
-// ⚙️ تنفيذ الأوامر
+// تنفيذ الأوامر (يستخدم CMD بدلاً من COMMANDS المباشر)
 async function handleCommand(cmd) {
   if (!cmd) return;
   const [command, ...args] = cmd.split(' ');
-  const cmdObj = COMMANDS[command];
+  const cmdObj = CMD[command];
   if (!cmdObj) {
     term.writeln(`❌ Unknown command: ${command}`);
     return;
@@ -111,7 +83,7 @@ async function handleCommand(cmd) {
   }
 }
 
-// 🔒 تبديل الصلاحية بعد التحقق من Supabase
+// تبديل الصلاحية مع التحقق من كلمة المرور في Supabase
 async function switchRole(role) {
   const pass = await promptPassword(`Password for ${role}: `);
   const valid = await verifyPassword(role, pass);
@@ -123,19 +95,16 @@ async function switchRole(role) {
   }
 }
 
-// 🔑 إدخال كلمة مرور (نجوم فقط + تعطيل الإدخال العام)
+// إدخال كلمة مرور (تظهر على شكل نجوم)
 function promptPassword(msg) {
   return new Promise(resolve => {
     let pwd = '';
     term.write(msg);
-    inputEnabled = false; // ⛔ تعطيل listener الأساسي مؤقتاً
-
     const listener = (data) => {
       const code = data.charCodeAt(0);
-      if (code === 13) { // Enter
+      if (code === 13) {
         term.offData(listener);
         term.writeln('');
-        inputEnabled = true; // ✅ إعادة التفعيل
         resolve(pwd);
       } else if (code === 127 && pwd.length > 0) {
         pwd = pwd.slice(0, -1);
@@ -145,12 +114,11 @@ function promptPassword(msg) {
         term.write('*');
       }
     };
-
     term.onData(listener);
   });
 }
 
-// 🧠 التحقق من كلمة المرور في Supabase
+// التحقق من Supabase
 async function verifyPassword(role, password) {
   try {
     const res = await fetch(`${SUPABASE_URL}/rest/v1/roles?name=eq.${role}`, {
