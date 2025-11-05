@@ -2,7 +2,7 @@
 const SUPABASE_URL = "https://hmamaaqtnzevrrmgtgxk.supabase.co";
 const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImhtYW1hYXF0bnpldnJybWd0Z3hrIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjIzNTgzMDAsImV4cCI6MjA3NzkzNDMwMH0.tk_S2URpkYvf8xnsPJl3Dqh4jzKwhVm0alWl8oHo-SE";
 
-// 🌐 رابط Google Apps Script Web App (الذي يتعامل مع ملفات JSON)
+// 🌐 رابط Google Apps Script Web App (للملفات مثلاً)
 const TERMINAL_API_URL = "https://script.google.com/macros/s/AKfycbwHEpFkBld76EVE6kBTeqkn2ShdS_cSqnBU1ue1QwrCO1JSGrC3kMpGrbFt6mqcNQgg/exec";
 
 // ⚡ تهيئة الترمنال
@@ -12,7 +12,7 @@ const term = new Terminal({
 });
 term.open(document.getElementById('terminal'));
 
-// المستويات اللونية
+// 🎨 المستويات اللونية
 const roles = {
   user: '#00ff00',
   admin: '#ffaa00',
@@ -20,8 +20,9 @@ const roles = {
 };
 
 let currentRole = 'user';
+let inputEnabled = true; // 🔐 يتحكم في السماح بالكتابة أثناء إدخال كلمة مرور
 
-// كتابة الموجه
+// ✳️ كتابة الموجه
 function writePrompt() {
   const color = roles[currentRole];
   term.write(`\r\n\x1b[38;2;${hexToRgb(color)}m${currentRole}@system:${currentRole === 'user' ? '~$' : '~#'} \x1b[0m`);
@@ -34,31 +35,66 @@ function hexToRgb(hex) {
 }
 
 // بدء الترمنال
-term.writeln("🟢 AdminShell v1.0");
+term.writeln("🟢 AdminShell v1.1");
 term.writeln("Type 'help' for available commands.");
 writePrompt();
 
-// قراءة الأوامر
+// 🔁 قراءة الأوامر
 let buffer = '';
 term.onData(async (data) => {
-  if (data.charCodeAt(0) === 13) { // Enter
+  if (!inputEnabled) return; // ⚠️ تجاهل الإدخال أثناء انتظار كلمة مرور
+
+  const code = data.charCodeAt(0);
+
+  if (code === 13) { // Enter
     term.writeln('');
     const cmd = buffer.trim();
     buffer = '';
     await handleCommand(cmd);
     writePrompt();
-  } else if (data.charCodeAt(0) === 127) { // Backspace
+
+  } else if (code === 127) { // Backspace
     if (buffer.length > 0) {
       buffer = buffer.slice(0, -1);
       term.write('\b \b');
     }
+
   } else {
     buffer += data;
     term.write(data);
   }
 });
 
-// تنفيذ الأوامر
+// 🧩 أوامر النظام
+const COMMANDS = {
+  help: {
+    description: "عرض قائمة الأوامر المتاحة",
+    action: async () => {
+      return "Available commands:\n - help\n - sudo\n - clear";
+    },
+  },
+  clear: {
+    description: "مسح الشاشة",
+    action: async () => {
+      term.clear();
+      return "🧹 Screen cleared.";
+    },
+  },
+  sudo: {
+    description: "ترقية الصلاحيات إلى admin",
+    action: async ({ switchRole }) => {
+      await switchRole('admin');
+    },
+  },
+  su: {
+    description: "تبديل المستخدم إلى root",
+    action: async ({ switchRole }) => {
+      await switchRole('root');
+    },
+  },
+};
+
+// ⚙️ تنفيذ الأوامر
 async function handleCommand(cmd) {
   if (!cmd) return;
   const [command, ...args] = cmd.split(' ');
@@ -75,7 +111,7 @@ async function handleCommand(cmd) {
   }
 }
 
-// تبديل الصلاحية مع التحقق من كلمة المرور في Supabase
+// 🔒 تبديل الصلاحية بعد التحقق من Supabase
 async function switchRole(role) {
   const pass = await promptPassword(`Password for ${role}: `);
   const valid = await verifyPassword(role, pass);
@@ -87,16 +123,19 @@ async function switchRole(role) {
   }
 }
 
-// إدخال كلمة مرور (تظهر على شكل نجوم)
+// 🔑 إدخال كلمة مرور (نجوم فقط + تعطيل الإدخال العام)
 function promptPassword(msg) {
   return new Promise(resolve => {
     let pwd = '';
     term.write(msg);
+    inputEnabled = false; // ⛔ تعطيل listener الأساسي مؤقتاً
+
     const listener = (data) => {
       const code = data.charCodeAt(0);
-      if (code === 13) {
+      if (code === 13) { // Enter
         term.offData(listener);
         term.writeln('');
+        inputEnabled = true; // ✅ إعادة التفعيل
         resolve(pwd);
       } else if (code === 127 && pwd.length > 0) {
         pwd = pwd.slice(0, -1);
@@ -106,11 +145,12 @@ function promptPassword(msg) {
         term.write('*');
       }
     };
+
     term.onData(listener);
   });
 }
 
-// التحقق من Supabase
+// 🧠 التحقق من كلمة المرور في Supabase
 async function verifyPassword(role, password) {
   try {
     const res = await fetch(`${SUPABASE_URL}/rest/v1/roles?name=eq.${role}`, {
