@@ -5,6 +5,7 @@ const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBh
 // 🌐 رابط Google Apps Script Web App (الذي يتعامل مع ملفات JSON)
 const TERMINAL_API_URL = "https://script.google.com/macros/s/AKfycbwHEpFkBld76EVE6kBTeqkn2ShdS_cSqnBU1ue1QwrCO1JSGrC3kMpGrbFt6mqcNQgg/exec";
 
+
 // ⚡ تهيئة الترمنال
 const term = new Terminal({
   theme: { background: '#0c0c0c', foreground: '#00ff00' },
@@ -21,48 +22,90 @@ const roles = {
 
 let currentRole = 'user';
 
-// كتابة الموجه
+// ✏️ كتابة الموجّه
 function writePrompt() {
   const color = roles[currentRole];
   term.write(`\r\n\x1b[38;2;${hexToRgb(color)}m${currentRole}@system:${currentRole === 'user' ? '~$' : '~#'} \x1b[0m`);
 }
 
-// تحويل hex إلى RGB
+// 🎨 تحويل hex → RGB
 function hexToRgb(hex) {
   const bigint = parseInt(hex.slice(1), 16);
   return `${(bigint >> 16) & 255};${(bigint >> 8) & 255};${bigint & 255}`;
 }
 
-// بدء الترمنال
-term.writeln("🟢 AdminShell v1.2");
+// 🚀 بدء الترمنال
+term.writeln("🟢 AdminShell v1.0");
 term.writeln("Type 'help' for available commands.");
 writePrompt();
 
-// قراءة الأوامر
+// 🧠 نظام إدخال ذكي: يميز بين أوامر وكلمات مرور
 let buffer = '';
+let passwordMode = false;
+let passwordResolver = null;
+
 term.onData(async (data) => {
-  if (data.charCodeAt(0) === 13) { // Enter
+  const code = data.charCodeAt(0);
+
+  // ↩️ Enter
+  if (code === 13) {
     term.writeln('');
-    const cmd = buffer.trim();
+    const input = buffer.trim();
     buffer = '';
-    await handleCommand(cmd);
+
+    // إذا كنا في وضع كلمة المرور
+    if (passwordMode) {
+      passwordMode = false;
+      if (passwordResolver) {
+        const resolver = passwordResolver;
+        passwordResolver = null;
+        resolver(input);
+      }
+      return;
+    }
+
+    // تنفيذ الأوامر العادية
+    await handleCommand(input);
     writePrompt();
-  } else if (data.charCodeAt(0) === 127) { // Backspace
+    return;
+  }
+
+  // ⌫ Backspace
+  if (code === 127) {
     if (buffer.length > 0) {
       buffer = buffer.slice(0, -1);
       term.write('\b \b');
     }
-  } else {
-    buffer += data;
-    term.write(data);
+    return;
   }
+
+  // ✳️ أثناء إدخال كلمة المرور → نجوم
+  if (passwordMode) {
+    buffer += data;
+    term.write('*');
+    return;
+  }
+
+  // ✍️ الوضع العادي
+  buffer += data;
+  term.write(data);
 });
 
-// تنفيذ الأوامر
+// 📥 إدخال كلمة مرور
+function promptPassword(msg) {
+  return new Promise(resolve => {
+    buffer = '';
+    passwordMode = true;
+    passwordResolver = resolve;
+    term.write(msg);
+  });
+}
+
+// ⚙️ تنفيذ الأوامر
 async function handleCommand(cmd) {
   if (!cmd) return;
   const [command, ...args] = cmd.split(' ');
-  const cmdObj = window.COMMANDS[command]; // ✅ هنا نستخدم COMMANDS من commands.js فقط
+  const cmdObj = COMMANDS[command];
   if (!cmdObj) {
     term.writeln(`❌ Unknown command: ${command}`);
     return;
@@ -75,7 +118,7 @@ async function handleCommand(cmd) {
   }
 }
 
-// تبديل الصلاحية مع التحقق من كلمة المرور في Supabase
+// 🔑 تبديل الصلاحية مع Supabase
 async function switchRole(role) {
   const pass = await promptPassword(`Password for ${role}: `);
   const valid = await verifyPassword(role, pass);
@@ -87,30 +130,7 @@ async function switchRole(role) {
   }
 }
 
-// إدخال كلمة مرور (تظهر على شكل نجوم)
-function promptPassword(msg) {
-  return new Promise(resolve => {
-    let pwd = '';
-    term.write(msg);
-    const listener = (data) => {
-      const code = data.charCodeAt(0);
-      if (code === 13) {
-        term.offData(listener);
-        term.writeln('');
-        resolve(pwd);
-      } else if (code === 127 && pwd.length > 0) {
-        pwd = pwd.slice(0, -1);
-        term.write('\b \b');
-      } else {
-        pwd += data;
-        term.write('*');
-      }
-    };
-    term.onData(listener);
-  });
-}
-
-// التحقق من Supabase
+// 🧾 التحقق من Supabase
 async function verifyPassword(role, password) {
   try {
     const res = await fetch(`${SUPABASE_URL}/rest/v1/roles?name=eq.${role}`, {
