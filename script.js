@@ -1,22 +1,18 @@
-// ================================
-// ⚡️ AdminShell Frontend Script (Fixed)
-// ================================
-
-// 🌐 إعداد API (Google Apps Script Endpoint)
-const TERMINAL_API_URL = "https://script.google.com/macros/s/AKfycbwHEpFkBld76EVE6kBTeqkn2ShdS_cSqnBU1ue1QwrCO1JSGrC3kMpGrbFt6mqcNQgg/exec";
-
-// ⚙️ إعداد Supabase (اختياري للمصادقة)
+// 🌐 إعداد Supabase
 const SUPABASE_URL = "https://hmamaaqtnzevrrmgtgxk.supabase.co";
 const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImhtYW1hYXF0bnpldnJybWd0Z3hrIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjIzNTgzMDAsImV4cCI6MjA3NzkzNDMwMH0.tk_S2URpkYvf8xnsPJl3Dqh4jzKwhVm0alWl8oHo-SE";
 
-// 🎨 تهيئة واجهة الترمنال
+// 🌐 رابط Google Apps Script Web App (TERMINAL API)
+const TERMINAL_API_URL = "https://script.google.com/macros/s/AKfycbwHEpFkBld76EVE6kBTeqkn2ShdS_cSqnBU1ue1QwrCO1JSGrC3kMpGrbFt6mqcNQgg/exec";
+
+// ⚡ تهيئة الترمنال
 const term = new Terminal({
   theme: { background: '#0c0c0c', foreground: '#00ff00' },
   cursorBlink: true,
 });
 term.open(document.getElementById('terminal'));
 
-// 🎭 المستويات اللونية حسب الدور
+// المستويات اللونية
 const roles = {
   user: '#00ff00',
   admin: '#ffaa00',
@@ -24,86 +20,63 @@ const roles = {
 };
 
 let currentRole = 'user';
-let buffer = ''; // تخزين الإدخال الحالي
 
-// ================================
-// 🟢 بدء الترمنال
-// ================================
-term.writeln("🟢 AdminShell v1.0");
-term.writeln("Type 'help' for available commands.");
-writePrompt();
-
-// ================================
-// 💬 كتابة الموجه
-// ================================
+// كتابة الموجه
 function writePrompt() {
   const color = roles[currentRole];
-  const rgb = hexToRgb(color);
-  term.write(`\r\n\x1b[38;2;${rgb}m${currentRole}@system:${currentRole === 'user' ? '~$' : '~#'} \x1b[0m `);
+  term.write(`\r\n\x1b[38;2;${hexToRgb(color)}m${currentRole}@system:${currentRole === 'user' ? '~$' : '~#'} \x1b[0m`);
 }
 
+// تحويل hex إلى RGB
 function hexToRgb(hex) {
   const bigint = parseInt(hex.slice(1), 16);
   return `${(bigint >> 16) & 255};${(bigint >> 8) & 255};${bigint & 255}`;
 }
 
-// ================================
-// 🎧 Listener الأساسي لإدخال الأوامر
-// ================================
-async function onTerminalData(data) {
-  const code = data.charCodeAt(0);
+// بدء الترمنال
+term.writeln("🟢 AdminShell v1.0");
+term.writeln("Type 'help' for available commands.");
+writePrompt();
 
-  if (code === 13) { // Enter
+// قراءة الأوامر
+let buffer = '';
+term.onData(async (data) => {
+  if (data.charCodeAt(0) === 13) { // Enter
     term.writeln('');
     const cmd = buffer.trim();
     buffer = '';
     await handleCommand(cmd);
     writePrompt();
-
-  } else if (code === 127) { // Backspace
+  } else if (data.charCodeAt(0) === 127) { // Backspace
     if (buffer.length > 0) {
       buffer = buffer.slice(0, -1);
       term.write('\b \b');
     }
-
   } else {
     buffer += data;
     term.write(data);
   }
-}
+});
 
-// 🔌 تفعيل listener
-term.onData(onTerminalData);
-
-// ================================
-// 🧠 تنفيذ الأوامر
-// ================================
-async function handleCommand(rawInput) {
-  if (!rawInput) return;
-
-  const [command, ...args] = rawInput.split(' ');
+// تنفيذ الأوامر
+async function handleCommand(cmd) {
+  if (!cmd) return;
+  const [command, ...args] = cmd.split(' ');
   const cmdObj = COMMANDS[command];
   if (!cmdObj) {
     term.writeln(`❌ Unknown command: ${command}`);
     return;
   }
-
   try {
-    const result = await cmdObj.action({
-      args,
-      rawInput,
-      role: currentRole,
-      switchRole,
-    });
+    // ✅ تم تمرير rawInput هنا لإصلاح الخطأ
+    const result = await cmdObj.action({ args, role: currentRole, switchRole, rawInput: cmd });
     if (result) term.writeln(result);
   } catch (err) {
-    term.writeln(`⚠️ Error: ${err.message || err}`);
+    term.writeln(`⚠️ Error: ${err}`);
   }
 }
 
-// ================================
-// 🔑 تبديل الصلاحية (user → admin → root)
-// ================================
+// تبديل الصلاحية مع التحقق من كلمة المرور في Supabase
 async function switchRole(role) {
   const pass = await promptPassword(`Password for ${role}: `);
   const valid = await verifyPassword(role, pass);
@@ -115,64 +88,41 @@ async function switchRole(role) {
   }
 }
 
-// ================================
-// 🔒 إدخال كلمة مرور (بإخفاء النجوم + تعطيل listener المؤقت)
-// ================================
+// إدخال كلمة مرور (تظهر على شكل نجوم)
 function promptPassword(msg) {
   return new Promise(resolve => {
     let pwd = '';
     term.write(msg);
-
-    // 🚫 تعطيل listener الأساسي أثناء إدخال كلمة المرور
-    term.offData(onTerminalData);
-
     const listener = (data) => {
       const code = data.charCodeAt(0);
-
-      if (code === 13) { // Enter
+      if (code === 13) {
         term.offData(listener);
         term.writeln('');
-        // ✅ إعادة listener بعد إدخال كلمة المرور
-        term.onData(onTerminalData);
         resolve(pwd);
-
       } else if (code === 127 && pwd.length > 0) {
         pwd = pwd.slice(0, -1);
         term.write('\b \b');
-
       } else {
         pwd += data;
         term.write('*');
       }
     };
-
     term.onData(listener);
   });
 }
 
-// ================================
-// 🧩 التحقق من كلمة المرور عبر Supabase أو ثابت محلي
-// ================================
+// التحقق من Supabase
 async function verifyPassword(role, password) {
   try {
-    // إذا لم تضبط Supabase، استخدم كلمات مرور ثابتة
-    if (SUPABASE_URL.includes("YOUR_SUPABASE_PROJECT")) {
-      const defaults = { admin: "admin123", root: "root123" };
-      return password === defaults[role];
-    }
-
     const res = await fetch(`${SUPABASE_URL}/rest/v1/roles?name=eq.${role}`, {
       headers: {
         apikey: SUPABASE_ANON_KEY,
         Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
-      }
+      },
     });
-
     const data = await res.json();
     return data.length && data[0].password === password;
-
-  } catch (err) {
-    console.error("Error verifying password:", err);
+  } catch {
     return false;
   }
 }
