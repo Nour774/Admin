@@ -1,5 +1,5 @@
 // ================================
-// ⚡️ AdminShell Frontend Script
+// ⚡️ AdminShell Frontend Script (Fixed)
 // ================================
 
 // 🌐 إعداد API (Google Apps Script Endpoint)
@@ -24,6 +24,7 @@ const roles = {
 };
 
 let currentRole = 'user';
+let buffer = ''; // تخزين الإدخال الحالي
 
 // ================================
 // 🟢 بدء الترمنال
@@ -32,24 +33,24 @@ term.writeln("🟢 AdminShell v1.0");
 term.writeln("Type 'help' for available commands.");
 writePrompt();
 
-// كتابة الموجه
+// ================================
+// 💬 كتابة الموجه
+// ================================
 function writePrompt() {
   const color = roles[currentRole];
   const rgb = hexToRgb(color);
   term.write(`\r\n\x1b[38;2;${rgb}m${currentRole}@system:${currentRole === 'user' ? '~$' : '~#'} \x1b[0m `);
 }
 
-// تحويل hex إلى RGB
 function hexToRgb(hex) {
   const bigint = parseInt(hex.slice(1), 16);
   return `${(bigint >> 16) & 255};${(bigint >> 8) & 255};${bigint & 255}`;
 }
 
 // ================================
-// 🎧 معالجة إدخال المستخدم
+// 🎧 Listener الأساسي لإدخال الأوامر
 // ================================
-let buffer = '';
-term.onData(async (data) => {
+async function onTerminalData(data) {
   const code = data.charCodeAt(0);
 
   if (code === 13) { // Enter
@@ -69,7 +70,10 @@ term.onData(async (data) => {
     buffer += data;
     term.write(data);
   }
-});
+}
+
+// 🔌 تفعيل listener
+term.onData(onTerminalData);
 
 // ================================
 // 🧠 تنفيذ الأوامر
@@ -112,12 +116,15 @@ async function switchRole(role) {
 }
 
 // ================================
-// 🔒 إدخال كلمة مرور (نجوم *)
+// 🔒 إدخال كلمة مرور (بإخفاء النجوم + تعطيل listener المؤقت)
 // ================================
 function promptPassword(msg) {
   return new Promise(resolve => {
     let pwd = '';
     term.write(msg);
+
+    // 🚫 تعطيل listener الأساسي أثناء إدخال كلمة المرور
+    term.offData(onTerminalData);
 
     const listener = (data) => {
       const code = data.charCodeAt(0);
@@ -125,6 +132,8 @@ function promptPassword(msg) {
       if (code === 13) { // Enter
         term.offData(listener);
         term.writeln('');
+        // ✅ إعادة listener بعد إدخال كلمة المرور
+        term.onData(onTerminalData);
         resolve(pwd);
 
       } else if (code === 127 && pwd.length > 0) {
@@ -142,11 +151,11 @@ function promptPassword(msg) {
 }
 
 // ================================
-// 🧩 التحقق من كلمة المرور عبر Supabase أو fallback
+// 🧩 التحقق من كلمة المرور عبر Supabase أو ثابت محلي
 // ================================
 async function verifyPassword(role, password) {
   try {
-    // إذا لم تضبط Supabase، استخدم كلمات مرور ثابتة محلياً
+    // إذا لم تضبط Supabase، استخدم كلمات مرور ثابتة
     if (SUPABASE_URL.includes("YOUR_SUPABASE_PROJECT")) {
       const defaults = { admin: "admin123", root: "root123" };
       return password === defaults[role];
@@ -158,9 +167,12 @@ async function verifyPassword(role, password) {
         Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
       }
     });
+
     const data = await res.json();
     return data.length && data[0].password === password;
-  } catch {
+
+  } catch (err) {
+    console.error("Error verifying password:", err);
     return false;
   }
 }
