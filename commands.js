@@ -1,6 +1,4 @@
-// ===================================================
-// ⚡️ AdminShell Commands - Final Version
-// ===================================================
+// ============ ⚡️ AdminShell Commands ============
 
 const COMMANDS = {};
 
@@ -19,7 +17,7 @@ COMMANDS.help = {
   }
 };
 
-// 🔹 الخروج من وضع المسؤول أو الروت
+// 🔹 أمر الخروج من وضع المسؤول أو الروت
 COMMANDS.exit = {
   description: "العودة إلى user",
   action: async ({ role }) => {
@@ -36,7 +34,7 @@ COMMANDS.exit = {
 COMMANDS.sudo = {
   description: "رفع الصلاحية إلى admin",
   action: async ({ args, switchRole }) => {
-    if (args[0] === "su") await switchRole("admin");
+    if (args[0] === 'su') await switchRole('admin');
     else return "Usage: sudo su";
   }
 };
@@ -45,7 +43,7 @@ COMMANDS.sudo = {
 COMMANDS.su = {
   description: "رفع الصلاحية إلى root",
   action: async ({ args, switchRole }) => {
-    if (args[0] === "root") await switchRole("root");
+    if (args[0] === 'root') await switchRole('root');
     else return "Usage: su root";
   }
 };
@@ -60,7 +58,7 @@ COMMANDS.echo = {
 // 🔐 أوامر الإدارة (خاصة بـ admin و root فقط)
 // ===================================================
 
-// 🔸 عرض قائمة الملفات JSON أو أي نوع
+// 🔸 عرض قائمة الملفات في Google Drive
 COMMANDS.list = {
   description: "عرض جميع الملفات في Google Drive",
   restricted: true,
@@ -71,63 +69,52 @@ COMMANDS.list = {
   }
 };
 
-// 🔸 قراءة أي ملف
+// 🔸 قراءة ملف
 COMMANDS.get = {
-  description: "قراءة ملف محدد",
+  description: "قراءة محتوى ملف محدد",
   restricted: true,
   action: async ({ role, args }) => {
     if (role === "user") return "🚫 الصلاحيات غير كافية.";
     const filename = args[0];
     if (!filename) return "❗ استخدم: get <filename>";
-    const res = await fetch(`${TERMINAL_API_URL}?action=get&file=${filename}`);
+    const res = await fetch(`${TERMINAL_API_URL}?action=get&name=${filename}`);
     return await res.text();
   }
 };
 
-// 🔸 إنشاء ملف جديد (أي صيغة)
+// 🔸 إنشاء ملف فارغ (بأي صيغة)
 COMMANDS.create = {
-  description: "إنشاء ملف جديد بأي صيغة",
+  description: "إنشاء ملف جديد فارغ",
   restricted: true,
   action: async ({ role, args }) => {
     if (role === "user") return "🚫 الصلاحيات غير كافية.";
     const filename = args[0];
     if (!filename) return "❗ استخدم: create <filename>";
-    const res = await fetch(`${TERMINAL_API_URL}?action=create&file=${filename}`);
+    const res = await fetch(`${TERMINAL_API_URL}?action=update&name=${filename}&data={}`);
     return await res.text();
   }
 };
 
-// 🔸 تحديث محتوى أي ملف (يدعم JSON أو نص)
+// 🔸 تحديث أو إنشاء ملف (أي نوع)
 COMMANDS.update = {
-  description: "تحديث محتوى ملف معين (يدعم JSON أو نص)",
+  description: "تحديث أو إنشاء ملف (حتى لو لم يوجد من قبل)",
   restricted: true,
   action: async ({ role, args, rawInput }) => {
     if (role === "user") return "🚫 الصلاحيات غير كافية.";
 
-    const filename = args[0];
+    const [filename, ...rest] = args;
     if (!filename) return "❗ استخدم: update <filename> <content>";
 
-    // ✅ الحصول على النص الأصلي بعد اسم الملف (حتى لو يحتوي على JSON)
-    const jsonStart = rawInput.indexOf(filename) + filename.length;
-    const contentStr = rawInput.slice(jsonStart).trim();
+    // 🔍 استخراج المحتوى بعد اسم الملف من النص الكامل
+    const contentStart = rawInput.indexOf(filename) + filename.length;
+    const content = rawInput.slice(contentStart).trim();
 
-    if (!contentStr) return "❗ لم يتم العثور على محتوى لتحديث الملف.";
+    // ✏️ إذا لم يُدخل المستخدم محتوى، أنشئ ملفًا فارغًا
+    const safeContent = content.length ? content : "";
 
-    let parsedContent = contentStr;
-    try {
-      // إذا كان المحتوى يبدو كـ JSON نحاول تحليله
-      if (contentStr.startsWith("{") || contentStr.startsWith("[")) {
-        parsedContent = JSON.parse(contentStr);
-      }
-    } catch (e) {
-      return `⚠️ JSON غير صالح: ${e.message}`;
-    }
-
-    const res = await fetch(`${TERMINAL_API_URL}?action=update&file=${filename}`, {
-      method: "POST",
-      body: typeof parsedContent === "string" ? parsedContent : JSON.stringify(parsedContent, null, 2),
-    });
-
+    const res = await fetch(
+      `${TERMINAL_API_URL}?action=update&name=${filename}&data=${encodeURIComponent(safeContent)}`
+    );
     return await res.text();
   }
 };
@@ -140,33 +127,14 @@ COMMANDS.delete = {
     if (role === "user") return "🚫 الصلاحيات غير كافية.";
     const filename = args[0];
     if (!filename) return "❗ استخدم: delete <filename>";
-    const res = await fetch(`${TERMINAL_API_URL}?action=delete&file=${filename}`);
+    const res = await fetch(`${TERMINAL_API_URL}?action=delete&name=${filename}`);
     return await res.text();
   }
 };
 
 // ===================================================
-// ✅ ملاحظات تشغيل
-// ===================================================
-//
-// 1️⃣ user يمكنه:
-//     - help
-//     - echo
-//
-// 2️⃣ admin/root يمكنهم:
-//     - list
-//     - get
-//     - create
-//     - update
-//     - delete
-//     - exit
-//
-// 3️⃣ update الآن يقبل:
-//     update file.json {"key":"value"}
-//     أو
-//     update notes.txt Hello world!
-//     أو حتى
-//     update config.json '{"theme":"dark"}'
-//
-// 4️⃣ create filename.ext  ← ينشئ أي ملف بأي صيغة
+// ✅ الملخص:
+// - user: يمكنه فقط help, echo
+// - admin/root: يمكنهم list, get, create, update, delete
+// - update يعمل الآن حتى لو لم تدخل محتوى، سينشئ ملفًا فارغًا تلقائيًا
 // ===================================================
