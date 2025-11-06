@@ -41,13 +41,14 @@ writePrompt();
 // قراءة الأوامر
 let buffer = '';
 term.onData(async (data) => {
-  if (data.charCodeAt(0) === 13) { // Enter
+  const code = data.charCodeAt(0);
+  if (code === 13) { // Enter
     term.writeln('');
     const cmd = buffer.trim();
     buffer = '';
     await handleCommand(cmd);
     writePrompt();
-  } else if (data.charCodeAt(0) === 127) { // Backspace
+  } else if (code === 127) { // Backspace
     if (buffer.length > 0) {
       buffer = buffer.slice(0, -1);
       term.write('\b \b');
@@ -87,18 +88,18 @@ async function switchRole(role) {
   }
 }
 
-// إدخال كلمة مرور (تظهر على شكل نجوم فقط)
+// ✅ إدخال كلمة مرور (إخفاء تام، تظهر فقط النجوم)
 function promptPassword(msg) {
   return new Promise(resolve => {
     let pwd = '';
     term.write(msg);
 
-    const listener = (data) => {
+    const onKey = (data) => {
       const code = data.charCodeAt(0);
 
       // ENTER
       if (code === 13) {
-        term.offData(listener);
+        term.offData(onKey);
         term.writeln('');
         resolve(pwd);
         return;
@@ -113,15 +114,16 @@ function promptPassword(msg) {
         return;
       }
 
-      // تجاهل أحرف التحكم غير المطبوعة
+      // تجاهل الرموز غير القابلة للطباعة
       if (code < 32 || code > 126) return;
 
-      // خزّن الحرف فعليًا وأظهر نجمة فقط
+      // لا تطبع الحرف نفسه، فقط نجمة
       pwd += data;
       term.write('*');
     };
 
-    term.onData(listener);
+    // أثناء إدخال كلمة المرور، امنع أي echo من xterm
+    term.onData(onKey);
   });
 }
 
