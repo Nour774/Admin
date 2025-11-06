@@ -68,7 +68,6 @@ async function handleCommand(cmd) {
     return;
   }
   try {
-    // ✅ تم تمرير rawInput هنا لإصلاح الخطأ
     const result = await cmdObj.action({ args, role: currentRole, switchRole, rawInput: cmd });
     if (result) term.writeln(result);
   } catch (err) {
@@ -88,25 +87,40 @@ async function switchRole(role) {
   }
 }
 
-// إدخال كلمة مرور (تظهر على شكل نجوم)
+// إدخال كلمة مرور (تظهر على شكل نجوم فقط)
 function promptPassword(msg) {
   return new Promise(resolve => {
     let pwd = '';
     term.write(msg);
+
     const listener = (data) => {
       const code = data.charCodeAt(0);
+
+      // ENTER
       if (code === 13) {
         term.offData(listener);
         term.writeln('');
         resolve(pwd);
-      } else if (code === 127 && pwd.length > 0) {
-        pwd = pwd.slice(0, -1);
-        term.write('\b \b');
-      } else {
-        pwd += data;
-        term.write('*');
+        return;
       }
+
+      // BACKSPACE
+      if (code === 127) {
+        if (pwd.length > 0) {
+          pwd = pwd.slice(0, -1);
+          term.write('\b \b');
+        }
+        return;
+      }
+
+      // تجاهل أحرف التحكم غير المطبوعة
+      if (code < 32 || code > 126) return;
+
+      // خزّن الحرف فعليًا وأظهر نجمة فقط
+      pwd += data;
+      term.write('*');
     };
+
     term.onData(listener);
   });
 }
