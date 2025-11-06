@@ -34,29 +34,58 @@ function hexToRgb(hex) {
 }
 
 // بدء الترمنال
-term.writeln("🟢 AdminShell v1.10");
+term.writeln("🟢 AdminShell v1.0");
 term.writeln("Type 'help' for available commands.");
 writePrompt();
 
-// قراءة الأوامر
+// 🧠 نظام إدخال ذكي: يميز بين "كتابة الأوامر" و"كتابة كلمة المرور"
 let buffer = '';
+let passwordMode = false;
+let passwordResolver = null;
+
 term.onData(async (data) => {
   const code = data.charCodeAt(0);
-  if (code === 13) { // Enter
+
+  // ↩️ Enter
+  if (code === 13) {
     term.writeln('');
-    const cmd = buffer.trim();
+    const input = buffer.trim();
     buffer = '';
-    await handleCommand(cmd);
+
+    if (passwordMode) {
+      passwordMode = false;
+      if (passwordResolver) {
+        const resolver = passwordResolver;
+        passwordResolver = null;
+        resolver(input);
+      }
+      return;
+    }
+
+    await handleCommand(input);
     writePrompt();
-  } else if (code === 127) { // Backspace
+    return;
+  }
+
+  // ⌫ Backspace
+  if (code === 127) {
     if (buffer.length > 0) {
       buffer = buffer.slice(0, -1);
       term.write('\b \b');
     }
-  } else {
-    buffer += data;
-    term.write(data);
+    return;
   }
+
+  // أثناء إدخال كلمة المرور → استبدل الأحرف بنجوم
+  if (passwordMode) {
+    buffer += data;
+    term.write('*');
+    return;
+  }
+
+  // الوضع العادي → كتابة أوامر
+  buffer += data;
+  term.write(data);
 });
 
 // تنفيذ الأوامر
@@ -88,42 +117,13 @@ async function switchRole(role) {
   }
 }
 
-// ✅ إدخال كلمة مرور (إخفاء تام، تظهر فقط النجوم)
+// 📥 دالة إدخال كلمة المرور
 function promptPassword(msg) {
   return new Promise(resolve => {
-    let pwd = '';
+    buffer = '';
+    passwordMode = true;
+    passwordResolver = resolve;
     term.write(msg);
-
-    const onKey = (data) => {
-      const code = data.charCodeAt(0);
-
-      // ENTER
-      if (code === 13) {
-        term.offData(onKey);
-        term.writeln('');
-        resolve(pwd);
-        return;
-      }
-
-      // BACKSPACE
-      if (code === 127) {
-        if (pwd.length > 0) {
-          pwd = pwd.slice(0, -1);
-          term.write('\b \b');
-        }
-        return;
-      }
-
-      // تجاهل الرموز غير القابلة للطباعة
-      if (code < 32 || code > 126) return;
-
-      // لا تطبع الحرف نفسه، فقط نجمة
-      pwd += data;
-      term.write('*');
-    };
-
-    // أثناء إدخال كلمة المرور، امنع أي echo من xterm
-    term.onData(onKey);
   });
 }
 
