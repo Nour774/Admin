@@ -63,11 +63,11 @@ COMMANDS.list = {
   description: "عرض الملفات مع فلترة حسب الاسم والصيغة وإظهار التفاصيل",
   restricted: true,
   action: async ({ role, args }) => {
-    if (role === "user") return "🚫 Insufficient privileges.";
+    if (role === "user") return " Insufficient privileges.";
 
     const res = await fetch(`${TERMINAL_API_URL}?action=list`);
     const files = await res.json();
-    if (!Array.isArray(files) || !files.length) return "📭 No files found.";
+    if (!Array.isArray(files) || !files.length) return " No files found.";
 
     // تهيئة الوسوم والبحث
     let flags = { id: false, url: false, txt: false, json: false, pdf: false, doc: false, js: false, all: false };
@@ -92,7 +92,7 @@ COMMANDS.list = {
           expectSearch = false;
         } else {
           // كلمة بدون -n مسبق -> خطأ
-          return "❌ Unknown command or invalid usage";
+          return " Unknown command or invalid usage";
         }
       }
     }
@@ -126,7 +126,7 @@ COMMANDS.list = {
       return parts.join(" | ");
     });
 
-    return output.length ? output.join("\n") : "❌ No matching files found.";
+    return output.length ? output.join("\n") : " No matching files found.";
   },
 };
 
@@ -135,7 +135,7 @@ COMMANDS.get = {
   description: "قراءة محتوى ملف محدد",
   restricted: true,
   action: async ({ role, args }) => {
-    if (role === "user") return "🚫 الصلاحيات غير كافية.";
+    if (role === "user") return " الصلاحيات غير كافية.";
     const filename = args[0];
     if (!filename) return "❗ Use: get <filename>";
     const res = await fetch(`${TERMINAL_API_URL}?action=get&name=${filename}`);
@@ -148,9 +148,9 @@ COMMANDS.create = {
   description: "إنشاء ملف جديد فارغ",
   restricted: true,
   action: async ({ role, args }) => {
-    if (role === "user") return "🚫 الصلاحيات غير كافية.";
+    if (role === "user") return " الصلاحيات غير كافية.";
     const filename = args[0];
-    if (!filename) return "❗ Use: create <filename>";
+    if (!filename) return " Use: create <filename>";
     const res = await fetch(`${TERMINAL_API_URL}?action=update&name=${filename}&data={}`);
     return await res.text();
   }
@@ -161,9 +161,9 @@ COMMANDS.update = {
   description: "تحديث أو إنشاء ملف (حتى لو لم يوجد من قبل)",
   restricted: true,
   action: async ({ role, args, rawInput }) => {
-    if (role === "user") return "🚫 الصلاحيات غير كافية.";
+    if (role === "user") return " الصلاحيات غير كافية.";
     const [filename, ...rest] = args;
-    if (!filename) return "❗ Use: update <filename> <content>";
+    if (!filename) return " Use: update <filename> <content>";
 
     const contentStart = rawInput.indexOf(filename) + filename.length;
     const content = rawInput.slice(contentStart).trim();
@@ -181,9 +181,9 @@ COMMANDS.delete = {
   description: "حذف ملف محدد",
   restricted: true,
   action: async ({ role, args }) => {
-    if (role === "user") return "🚫 الصلاحيات غير كافية.";
+    if (role === "user") return " الصلاحيات غير كافية.";
     const filename = args[0];
-    if (!filename) return "❗ Use: delete <filename>";
+    if (!filename) return " Use: delete <filename>";
     const res = await fetch(`${TERMINAL_API_URL}?action=delete&name=${filename}`);
     return await res.text();
   }
