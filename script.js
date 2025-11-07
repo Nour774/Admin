@@ -7,39 +7,38 @@ const TERMINAL_API_URL = "https://script.google.com/macros/s/AKfycbwHEpFkBld76EV
 
 // ⚡ تهيئة الترمنال
 const term = new Terminal({
-  theme: {
-    background: '#0c0c0c',
-    foreground: '#00ff00'
-  },
+  theme: { background: '#0c0c0c', foreground: '#00ff00' },
   cursorBlink: true,
 });
 term.open(document.getElementById('terminal'));
 
-// 🧠 نظام الألوان حسب الرتبة
+// المستويات اللونية
 const roles = {
   user: '#00ff00',
   admin: '#ffaa00',
   root: '#ff5555',
 };
+
 let currentRole = 'user';
 
-// 🎨 موجه الأوامر
+// كتابة الموجه
 function writePrompt() {
   const color = roles[currentRole];
   term.write(`\r\n\x1b[38;2;${hexToRgb(color)}m${currentRole}@system:${currentRole === 'user' ? '~$' : '~#'} \x1b[0m`);
 }
 
+// تحويل hex إلى RGB
 function hexToRgb(hex) {
   const bigint = parseInt(hex.slice(1), 16);
   return `${(bigint >> 16) & 255};${(bigint >> 8) & 255};${bigint & 255}`;
 }
 
-// 🚀 بدء الترمنال
+// بدء الترمنال
 term.writeln("🟢 AdminShell v1.0");
 term.writeln("Type 'help' for available commands.");
 writePrompt();
 
-// 🧠 نظام إدخال ذكي (كلمات مرور + أوامر)
+// 🧠 نظام إدخال ذكي
 let buffer = '';
 let passwordMode = false;
 let passwordResolver = null;
@@ -77,49 +76,36 @@ term.onData(async (data) => {
     return;
   }
 
-  // 🔒 وضع كلمة المرور
+  // أثناء إدخال كلمة المرور → استبدل الأحرف بنجوم
   if (passwordMode) {
     buffer += data;
     term.write('*');
     return;
   }
 
-  // 💬 الوضع العادي
+  // الوضع العادي → كتابة أوامر
   buffer += data;
   term.write(data);
 });
 
-// 📥 دالة إدخال كلمة المرور
-function promptPassword(msg) {
-  return new Promise(resolve => {
-    buffer = '';
-    passwordMode = true;
-    passwordResolver = resolve;
-    term.write(msg);
-  });
-}
-
-// ⚙️ تنفيذ الأوامر
+// تنفيذ الأوامر
 async function handleCommand(cmd) {
   if (!cmd) return;
-  const parts = cmd.split(' ').filter(x => x.trim() !== '');
-  const [command, ...args] = parts;
-
+  const [command, ...args] = cmd.split(' ');
   const cmdObj = COMMANDS[command];
   if (!cmdObj) {
     term.writeln(`❌ Unknown command: ${command}`);
     return;
   }
-
   try {
     const result = await cmdObj.action({ args, role: currentRole, switchRole, rawInput: cmd });
-    if (result) term.writeln(result);
+    if (result !== undefined && result !== null) term.writeln(String(result));
   } catch (err) {
     term.writeln(`⚠️ Error: ${err}`);
   }
 }
 
-// 🔑 تبديل الصلاحية
+// تبديل الصلاحية
 async function switchRole(role) {
   const pass = await promptPassword(`Password for ${role}: `);
   const valid = await verifyPassword(role, pass);
@@ -131,7 +117,17 @@ async function switchRole(role) {
   }
 }
 
-// 🧩 التحقق من كلمة المرور من Supabase
+// 📥 إدخال كلمة المرور
+function promptPassword(msg) {
+  return new Promise(resolve => {
+    buffer = '';
+    passwordMode = true;
+    passwordResolver = resolve;
+    term.write(msg);
+  });
+}
+
+// التحقق من Supabase
 async function verifyPassword(role, password) {
   try {
     const res = await fetch(`${SUPABASE_URL}/rest/v1/roles?name=eq.${role}`, {
@@ -147,71 +143,21 @@ async function verifyPassword(role, password) {
   }
 }
 
-// 💾 تخزين مؤقت للملفات في الذاكرة
-window.files = {};
-
-// 🧱 أوامر النظام
+// 🧩 أوامر النظام
 const COMMANDS = {
   help: {
-    description: 'List available commands',
+    action: async () => "Available commands: help, clear, create [filename]"
+  },
+  clear: {
     action: async () => {
-      return Object.keys(COMMANDS)
-        .map(cmd => `- ${cmd}: ${COMMANDS[cmd].description}`)
-        .join('\n');
+      term.clear();
+      return "🧹 Screen cleared.";
     }
   },
   create: {
-    description: 'Create a new file (usage: create <filename>)',
     action: async ({ args }) => {
-      if (!args || args.length === 0) return '❌ Usage: create <filename>';
-      const filename = args[0];
-      if (window.files[filename]) return `❌ File "${filename}" already exists.`;
-      window.files[filename] = '';
-      return `✅ File "${filename}" created.`;
-    }
-  },
-  write: {
-    description: 'Write content to a file (usage: write <filename> <text>)',
-    action: async ({ args }) => {
-      if (args.length < 2) return '❌ Usage: write <filename> <text>';
-      const filename = args[0];
-      const text = args.slice(1).join(' ');
-      if (!window.files[filename]) return `❌ File "${filename}" not found.`;
-      window.files[filename] = text;
-      return `✅ Written to "${filename}".`;
-    }
-  },
-  read: {
-    description: 'Read file content (usage: read <filename>)',
-    action: async ({ args }) => {
-      if (!args.length) return '❌ Usage: read <filename>';
-      const filename = args[0];
-      if (!window.files[filename]) return `❌ File "${filename}" not found.`;
-      return `📄 ${filename}:\n${window.files[filename]}`;
-    }
-  },
-  delete: {
-    description: 'Delete a file (usage: delete <filename>)',
-    action: async ({ args }) => {
-      if (!args.length) return '❌ Usage: delete <filename>';
-      const filename = args[0];
-      if (!window.files[filename]) return `❌ File "${filename}" not found.`;
-      delete window.files[filename];
-      return `🗑️ File "${filename}" deleted.`;
-    }
-  },
-  list: {
-    description: 'List all created files',
-    action: async () => {
-      const files = Object.keys(window.files);
-      return files.length ? files.join('\n') : '📂 No files found.';
-    }
-  },
-  clear: {
-    description: 'Clear the terminal screen',
-    action: async () => {
-      term.clear();
-      return '';
+      if (!args[0]) return "⚠️ Usage: create <filename>";
+      return `📄 File '${args[0]}' created successfully.`;
     }
   }
 };
