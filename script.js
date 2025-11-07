@@ -3,7 +3,7 @@ const SUPABASE_URL = "https://hmamaaqtnzevrrmgtgxk.supabase.co";
 const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImhtYW1hYXF0bnpldnJybWd0Z3hrIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjIzNTgzMDAsImV4cCI6MjA3NzkzNDMwMH0.tk_S2URpkYvf8xnsPJl3Dqh4jzKwhVm0alWl8oHo-SE";
 
 // 🌐 رابط Google Apps Script Web App (TERMINAL API)
-const TERMINAL_API_URL = "https://script.google.com/macros/s/AKfycbzjkn6zlpikLbil1rsADMSTa2cY_cIh1x_bDlcGsoztPgEzIVCSr4j3Upm3Vag2ikerCQ/exec";
+const TERMINAL_API_URL = "https://script.google.com/macros/s/AKfycbxUU2O9GuK0xTYACY4f2ba-b8r1mTuaKmzALjasy1fy-GCubXUPJ-MilEuHifgKPEDKTQ/exec";
 
 // ⚡ تهيئة الترمنال
 const term = new Terminal({
