@@ -1,13 +1,11 @@
 // ============ ⚡️ AdminShell Commands (Full Updated) ============
-const COMMANDS = {};
+const COMMANDS = {}; // تعريف واحد فقط وآمن
 
-// 🧭 تعريف آمن بدون تكرار
+// 🧭 تعريف متغيرات البيئة العامة
 window.currentPath = window.currentPath || "/";
 window.currentRole = window.currentRole || "user";
 
-
-
-// 🔹 عرض الأوامر
+// 🔹 عرض الأوامر المتاحة
 COMMANDS.help = {
   description: "عرض جميع الأوامر المتاحة",
   action: async ({ role }) => {
@@ -19,226 +17,116 @@ COMMANDS.help = {
       })
       .map(cmd => `• ${cmd} - ${COMMANDS[cmd].description}`)
       .join("\n");
-  }
+  },
 };
 
-// 🔹 الصلاحيات
-COMMANDS.exit = {
-  description: "العودة إلى user",
-  action: async ({ role }) => {
-    if (role === "admin" || role === "root") {
-      currentRole = "user";
-      return "🔒 Returned to user privileges.";
-    } else {
-      return "❗ أنت بالفعل مستخدم عادي.";
-    }
-  }
-};
-
-COMMANDS.sudo = {
-  description: "رفع الصلاحية إلى admin",
-  action: async ({ args, switchRole }) => {
-    if (args[0] === "su") await switchRole("admin");
-    else return "Usage: sudo su";
-  }
-};
-
-COMMANDS.su = {
-  description: "رفع الصلاحية إلى root",
-  action: async ({ args, switchRole }) => {
-    if (args[0] === "root") await switchRole("root");
-    else return "Usage: su root";
-  }
-};
-
-// 🔹 echo
+// 🔹 أمر echo
 COMMANDS.echo = {
   description: "إعادة النص كما هو",
   action: async ({ args }) => args.join(" "),
 };
 
-// ===================================================
-// 🔐 أوامر الإدارة (admin / root)
-// ===================================================
+// 🔹 أمر clear
+COMMANDS.clear = {
+  description: "مسح الشاشة",
+  action: async () => {
+    const output = document.getElementById("terminal-output");
+    if (output) output.innerHTML = "";
+    return "";
+  },
+};
 
-// 🔹 cd
+// 🔹 أمر whoami
+COMMANDS.whoami = {
+  description: "عرض الدور الحالي",
+  action: async () => `الدور الحالي: ${window.currentRole}`,
+};
+
+// 🔹 أمر cd لتغيير المسار
 COMMANDS.cd = {
-  description: "تغيير المجلد الحالي",
-  restricted: true,
-  action: async ({ role, args }) => {
-    if (role === "user") return " Insufficient privileges.";
-    const target = args[0];
-    if (!target) return "Usage: cd <folder>";
-    const newPath = resolvePathCD(currentPath, target);
-
-    // تحقق من وجود المجلد
-    const res = await fetch(`${TERMINAL_API_URL}?action=list&path=${newPath}`);
-    const files = await res.json();
-    if (!Array.isArray(files) || !files.some(f => f.mimeType === "folder")) {
-      return ` Folder not found: ${target}`;
-    }
-
-    currentPath = newPath;
-    return `📂 Moved to [${getLastPart(newPath) || '~'}]`;
-  }
-};
-
-// 🔹 mkdir
-COMMANDS.mkdir = {
-  description: "إنشاء مجلد جديد في Google Drive",
-  restricted: true,
-  action: async ({ role, args }) => {
-    if (role === "user") return " Insufficient privileges.";
-    const folderName = args[0];
-    if (!folderName) return "Usage: mkdir <folderName>";
-    const path = currentPath ? `${currentPath}/${folderName}` : folderName;
-    const res = await fetch(`${TERMINAL_API_URL}?action=mkdir&path=${path}`);
-    return await res.text();
-  }
-};
-
-// 🔹 list
-COMMANDS.list = {
-  description: "عرض الملفات والمجلدات مع دعم --all و -n للبحث",
-  restricted: true,
-  action: async ({ role, args }) => {
-    if (role === "user") return " Insufficient privileges.";
-
-    let flags = { all: false, txt: false, js: false, doc: false, pdf: false, json: false, id: false, url: false };
-    let searchTerm = null;
-    let expectSearch = false;
-    let targetPath = currentPath;
-
-    for (let i = 0; i < args.length; i++) {
-      const arg = args[i].toLowerCase();
-      if (arg === "--all") flags.all = true;
-      else if (arg === "--txt") flags.txt = true;
-      else if (arg === "--js") flags.js = true;
-      else if (arg === "--doc") flags.doc = true;
-      else if (arg === "--pdf") flags.pdf = true;
-      else if (arg === "--json") flags.json = true;
-      else if (arg === "-id") flags.id = true;
-      else if (arg === "-url") flags.url = true;
-      else if (arg === "-n") expectSearch = true;
-      else {
-        if (expectSearch) {
-          searchTerm = arg;
-          expectSearch = false;
-        } else {
-          targetPath = resolvePathCD(currentPath, arg);
-        }
-      }
-    }
-
-    const fetchFiles = async (path) => {
-      const res = await fetch(`${TERMINAL_API_URL}?action=list&path=${path}`);
-      const files = await res.json();
-      return Array.isArray(files) ? files : [];
-    };
-
-    const filterByExt = f => {
-      if (f.mimeType === "folder") return true;
-      const ext = f.name.split(".").pop().toLowerCase();
-      if (flags.all) return true;
-      if (flags.txt && ext !== "txt") return false;
-      if (flags.js && ext !== "js") return false;
-      if (flags.doc && !["doc","docx"].includes(ext)) return false;
-      if (flags.pdf && ext !== "pdf") return false;
-      if (flags.json && ext !== "json") return false;
-      return !flags.txt && !flags.js && !flags.doc && !flags.pdf && !flags.json;
-    };
-
-    const printTree = async (path, indent = "") => {
-      let files = await fetchFiles(path);
-      if (searchTerm && !flags.all) {
-        files = files.filter(f => f.name.toLowerCase().includes(searchTerm));
-      }
-
-      let lines = [];
-      for (const f of files) {
-        if (!filterByExt(f)) continue;
-        const isFolder = f.mimeType === "folder";
-        const name = isFolder ? `📂 [${f.name}]` : `📄 ${f.name}`;
-        let line = indent + name;
-        if (flags.id) line += ` | 🆔 ${f.id}`;
-        if (flags.url) line += ` | 🔗 ${f.url}`;
-        lines.push(line);
-
-        if (isFolder && flags.all) {
-          const subPath = path ? `${path}/${f.name}` : f.name;
-          const subLines = await printTree(subPath, indent + "  ");
-          lines.push(...subLines);
-        }
-      }
-      return lines;
-    };
-
-    const output = await printTree(targetPath);
-    return output.length ? output.join("\n") : " No matching files or folders found.";
-  }
-};
-
-// 🔹 create
-COMMANDS.create = {
-  description: "إنشاء ملف جديد (يدعم المسارات)",
-  restricted: true,
-  action: async ({ role, args }) => {
-    if (role === "user") return " Insufficient privileges.";
+  description: "تغيير المسار الحالي",
+  action: async ({ args }) => {
     const path = args[0];
-    if (!path) return "Usage: create <path/filename>";
-    const fullPath = currentPath ? `${currentPath}/${path}` : path;
-    const res = await fetch(`${TERMINAL_API_URL}?action=create&path=${fullPath}`);
-    return await res.text();
-  }
+    if (!path) return "❌ يجب إدخال مسار.";
+    window.currentPath = path;
+    return `📁 تم الانتقال إلى: ${path}`;
+  },
 };
 
-// 🔹 update
-COMMANDS.update = {
-  description: "تحديث أو إنشاء ملف (يدعم المسارات)",
-  restricted: true,
-  action: async ({ role, args, rawInput }) => {
-    if (role === "user") return " Insufficient privileges.";
-    const [path, ...rest] = args;
-    if (!path) return "Usage: update <path/filename> <content>";
-
-    const contentStart = rawInput.indexOf(path) + path.length;
-    const content = rawInput.slice(contentStart).trim();
-    const fullPath = currentPath ? `${currentPath}/${path}` : path;
-    const res = await fetch(`${TERMINAL_API_URL}?action=update&path=${fullPath}&data=${encodeURIComponent(content)}`);
-    return await res.text();
-  }
+// 🔹 أمر sudo
+COMMANDS.sudo = {
+  description: "الوصول إلى صلاحيات المدير",
+  action: async ({ args }) => {
+    const password = args.join(" ");
+    if (password === "admin123") {
+      window.currentRole = "admin";
+      return "✅ تم منح صلاحيات المدير.";
+    }
+    return "❌ كلمة مرور خاطئة.";
+  },
 };
 
-// 🔹 delete
-COMMANDS.delete = {
-  description: "حذف ملف أو مجلد",
-  restricted: true,
-  action: async ({ role, args }) => {
-    if (role === "user") return " Insufficient privileges.";
-    const path = args[0];
-    if (!path) return "Usage: delete <path>";
-    const fullPath = currentPath ? `${currentPath}/${path}` : path;
-    const res = await fetch(`${TERMINAL_API_URL}?action=delete&path=${fullPath}`);
-    return await res.text();
-  }
+// 🔹 أمر exit
+COMMANDS.exit = {
+  description: "الخروج من صلاحيات المدير",
+  action: async () => {
+    window.currentRole = "user";
+    return "🚪 تم تسجيل الخروج من وضع المدير.";
+  },
 };
 
-// ===================================================
-// 🔹 دوال مساعدة
-function getLastPart(path) {
-  if (!path) return "";
-  const parts = path.split("/").filter(Boolean);
-  return parts[parts.length - 1] || "";
+// 🔹 أمر fakepath (لإظهار المسار الحالي)
+COMMANDS.pwd = {
+  description: "عرض المسار الحالي",
+  action: async () => `📂 المسار الحالي: ${window.currentPath}`,
+};
+
+// 🔹 تنفيذ الأوامر
+async function handleCommand(input) {
+  const output = document.getElementById("terminal-output");
+  const [cmd, ...args] = input.trim().split(/\s+/);
+  const command = COMMANDS[cmd];
+
+  if (!command) {
+    appendOutput(`❌ Unknown command: ${cmd}`);
+    return;
+  }
+
+  // التحقق من الصلاحيات
+  if (command.restricted && window.currentRole !== "admin") {
+    appendOutput("⛔ هذا الأمر مخصص للمدير فقط.");
+    return;
+  }
+
+  try {
+    const result = await command.action({ args, role: window.currentRole });
+    if (result) appendOutput(result);
+  } catch (err) {
+    appendOutput(`⚠️ خطأ أثناء تنفيذ الأمر: ${err.message}`);
+  }
 }
 
-function resolvePathCD(base, target) {
-  if (!target) return base;
-  let parts = base.split("/").filter(Boolean);
-
-  const segments = target.split("/").filter(Boolean);
-  for (const seg of segments) {
-    if (seg === "..") parts.pop();
-    else if (seg !== ".") parts.push(seg);
-  }
-  return parts.join("/");
+// 🔹 دالة لطباعة النتائج
+function appendOutput(text) {
+  const output = document.getElementById("terminal-output");
+  if (!output) return;
+  const line = document.createElement("div");
+  line.textContent = text;
+  output.appendChild(line);
+  output.scrollTop = output.scrollHeight;
 }
+
+// 🔹 حدث الإدخال (Enter)
+document.addEventListener("DOMContentLoaded", () => {
+  const input = document.getElementById("terminal-input");
+  if (!input) return;
+
+  input.addEventListener("keydown", async (e) => {
+    if (e.key === "Enter") {
+      const command = input.value.trim();
+      appendOutput(`> ${command}`);
+      input.value = "";
+      await handleCommand(command);
+    }
+  });
+});
