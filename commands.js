@@ -2,7 +2,7 @@
 const COMMANDS = {};
 
 // 🌐 المجلد الحالي
-let currentPath = "/"; // empty string يعني ROOT_FOLDER_ID
+let currentPath = ""; // empty string يعني ROOT_FOLDER_ID
 
 // 🔹 عرض الأوامر
 COMMANDS.help = {
