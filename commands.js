@@ -1,8 +1,12 @@
 // ============ ⚡️ AdminShell Commands (Full Updated) ============
 const COMMANDS = {};
 
-// ✅ تعريف المتغيرات بطريقة آمنة لتجنب التكرار
-if (typeof currentPath === "undefined") var currentPath = "/";
+// 🧭 تعريف آمن بدون تكرار
+window.currentPath = window.currentPath || "/";
+window.currentRole = window.currentRole || "user";
+
+
+
 // ============ ⚡️ AdminShell Commands (Full Updated) ============
 const COMMANDS = {};
 
