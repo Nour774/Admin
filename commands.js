@@ -3,7 +3,6 @@ const COMMANDS = {};
 
 // ✅ تعريف المتغيرات بطريقة آمنة لتجنب التكرار
 if (typeof currentPath === "undefined") var currentPath = "/";
-if (typeof currentRole === "undefined") var currentRole = "user";
 // ============ ⚡️ AdminShell Commands (Full Updated) ============
 const COMMANDS = {};
 
