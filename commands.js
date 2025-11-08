@@ -1,8 +1,11 @@
 // ============ ⚡️ AdminShell Commands (Full Updated) ============
 const COMMANDS = {};
 
-// 🧭 المسار الحالي للمجلد
-let currentPath = "/";  // ✅ إصلاح: تعريف المتغير قبل استخدامه
+// ✅ تعريف المتغيرات بطريقة آمنة لتجنب التكرار
+if (typeof currentPath === "undefined") var currentPath = "/";
+if (typeof currentRole === "undefined") var currentRole = "user";
+// ============ ⚡️ AdminShell Commands (Full Updated) ============
+const COMMANDS = {};
 
 // 🔹 عرض الأوامر
 COMMANDS.help = {
@@ -20,8 +23,6 @@ COMMANDS.help = {
 };
 
 // 🔹 الصلاحيات
-let currentRole = "user"; // ✅ يفضل أيضا تعريف الدور الحالي لتفادي undefined
-
 COMMANDS.exit = {
   description: "العودة إلى user",
   action: async ({ role }) => {
@@ -70,12 +71,12 @@ COMMANDS.cd = {
     if (!target) return "Usage: cd <folder>";
     const newPath = resolvePathCD(currentPath, target);
 
+    // تحقق من وجود المجلد
     const res = await fetch(`${TERMINAL_API_URL}?action=list&path=${newPath}`);
     const files = await res.json();
-    if (!Array.isArray(files)) return "⚠️ Invalid response from server.";
-
-    const folderExists = files.some(f => f.mimeType === "folder" && f.name === target);
-    if (!folderExists) return `📁 Folder not found: ${target}`;
+    if (!Array.isArray(files) || !files.some(f => f.mimeType === "folder")) {
+      return ` Folder not found: ${target}`;
+    }
 
     currentPath = newPath;
     return `📂 Moved to [${getLastPart(newPath) || '~'}]`;
@@ -177,6 +178,51 @@ COMMANDS.list = {
   }
 };
 
+// 🔹 create
+COMMANDS.create = {
+  description: "إنشاء ملف جديد (يدعم المسارات)",
+  restricted: true,
+  action: async ({ role, args }) => {
+    if (role === "user") return " Insufficient privileges.";
+    const path = args[0];
+    if (!path) return "Usage: create <path/filename>";
+    const fullPath = currentPath ? `${currentPath}/${path}` : path;
+    const res = await fetch(`${TERMINAL_API_URL}?action=create&path=${fullPath}`);
+    return await res.text();
+  }
+};
+
+// 🔹 update
+COMMANDS.update = {
+  description: "تحديث أو إنشاء ملف (يدعم المسارات)",
+  restricted: true,
+  action: async ({ role, args, rawInput }) => {
+    if (role === "user") return " Insufficient privileges.";
+    const [path, ...rest] = args;
+    if (!path) return "Usage: update <path/filename> <content>";
+
+    const contentStart = rawInput.indexOf(path) + path.length;
+    const content = rawInput.slice(contentStart).trim();
+    const fullPath = currentPath ? `${currentPath}/${path}` : path;
+    const res = await fetch(`${TERMINAL_API_URL}?action=update&path=${fullPath}&data=${encodeURIComponent(content)}`);
+    return await res.text();
+  }
+};
+
+// 🔹 delete
+COMMANDS.delete = {
+  description: "حذف ملف أو مجلد",
+  restricted: true,
+  action: async ({ role, args }) => {
+    if (role === "user") return " Insufficient privileges.";
+    const path = args[0];
+    if (!path) return "Usage: delete <path>";
+    const fullPath = currentPath ? `${currentPath}/${path}` : path;
+    const res = await fetch(`${TERMINAL_API_URL}?action=delete&path=${fullPath}`);
+    return await res.text();
+  }
+};
+
 // ===================================================
 // 🔹 دوال مساعدة
 function getLastPart(path) {
@@ -188,6 +234,7 @@ function getLastPart(path) {
 function resolvePathCD(base, target) {
   if (!target) return base;
   let parts = base.split("/").filter(Boolean);
+
   const segments = target.split("/").filter(Boolean);
   for (const seg of segments) {
     if (seg === "..") parts.pop();
