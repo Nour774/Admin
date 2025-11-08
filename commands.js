@@ -1,11 +1,10 @@
-// ============ ⚡️ AdminShell Commands (Full Updated) ============
-const COMMANDS = {}; // تعريف واحد فقط وآمن
+// ============ ⚡️ AdminShell Commands (Full Enhanced) ============
+const COMMANDS = {};
 
-// 🧭 تعريف متغيرات البيئة العامة
-window.currentPath = window.currentPath || "/";
-window.currentRole = window.currentRole || "user";
+// 🌐 المجلد الحالي
+let currentPath = "/"; // empty string يعني ROOT_FOLDER_ID
 
-// 🔹 عرض الأوامر المتاحة
+// 🔹 عرض الأوامر
 COMMANDS.help = {
   description: "عرض جميع الأوامر المتاحة",
   action: async ({ role }) => {
@@ -17,116 +16,225 @@ COMMANDS.help = {
       })
       .map(cmd => `• ${cmd} - ${COMMANDS[cmd].description}`)
       .join("\n");
-  },
+  }
 };
 
-// 🔹 أمر echo
+// 🔹 الصلاحيات
+COMMANDS.exit = {
+  description: "العودة إلى user",
+  action: async ({ role }) => {
+    if (role === "admin" || role === "root") {
+      currentRole = "user";
+      return "🔒 Returned to user privileges.";
+    } else {
+      return "❗ أنت بالفعل مستخدم عادي.";
+    }
+  }
+};
+
+COMMANDS.sudo = {
+  description: "رفع الصلاحية إلى admin",
+  action: async ({ args, switchRole }) => {
+    if (args[0] === "su") await switchRole("admin");
+    else return "Usage: sudo su";
+  }
+};
+
+COMMANDS.su = {
+  description: "رفع الصلاحية إلى root",
+  action: async ({ args, switchRole }) => {
+    if (args[0] === "root") await switchRole("root");
+    else return "Usage: su root";
+  }
+};
+
+// 🔹 echo
 COMMANDS.echo = {
   description: "إعادة النص كما هو",
   action: async ({ args }) => args.join(" "),
 };
 
-// 🔹 أمر clear
-COMMANDS.clear = {
-  description: "مسح الشاشة",
-  action: async () => {
-    const output = document.getElementById("terminal-output");
-    if (output) output.innerHTML = "";
-    return "";
-  },
-};
+// ===================================================
+// 🔐 أوامر الإدارة (admin / root)
+// ===================================================
 
-// 🔹 أمر whoami
-COMMANDS.whoami = {
-  description: "عرض الدور الحالي",
-  action: async () => `الدور الحالي: ${window.currentRole}`,
-};
+// 🔹 دالة مساعدة لتحويل مسار cd نسبي
+function resolvePathCD(base, input) {
+  if (!input || input === ".") return base;
+  let parts = base ? base.split("/") : [];
+  const inputParts = input.split("/").filter(Boolean);
 
-// 🔹 أمر cd لتغيير المسار
-COMMANDS.cd = {
-  description: "تغيير المسار الحالي",
-  action: async ({ args }) => {
-    const path = args[0];
-    if (!path) return "❌ يجب إدخال مسار.";
-    window.currentPath = path;
-    return `📁 تم الانتقال إلى: ${path}`;
-  },
-};
-
-// 🔹 أمر sudo
-COMMANDS.sudo = {
-  description: "الوصول إلى صلاحيات المدير",
-  action: async ({ args }) => {
-    const password = args.join(" ");
-    if (password === "admin123") {
-      window.currentRole = "admin";
-      return "✅ تم منح صلاحيات المدير.";
-    }
-    return "❌ كلمة مرور خاطئة.";
-  },
-};
-
-// 🔹 أمر exit
-COMMANDS.exit = {
-  description: "الخروج من صلاحيات المدير",
-  action: async () => {
-    window.currentRole = "user";
-    return "🚪 تم تسجيل الخروج من وضع المدير.";
-  },
-};
-
-// 🔹 أمر fakepath (لإظهار المسار الحالي)
-COMMANDS.pwd = {
-  description: "عرض المسار الحالي",
-  action: async () => `📂 المسار الحالي: ${window.currentPath}`,
-};
-
-// 🔹 تنفيذ الأوامر
-async function handleCommand(input) {
-  const output = document.getElementById("terminal-output");
-  const [cmd, ...args] = input.trim().split(/\s+/);
-  const command = COMMANDS[cmd];
-
-  if (!command) {
-    appendOutput(`❌ Unknown command: ${cmd}`);
-    return;
+  for (const p of inputParts) {
+    if (p === "..") parts.pop();
+    else if (p !== ".") parts.push(p);
   }
-
-  // التحقق من الصلاحيات
-  if (command.restricted && window.currentRole !== "admin") {
-    appendOutput("⛔ هذا الأمر مخصص للمدير فقط.");
-    return;
-  }
-
-  try {
-    const result = await command.action({ args, role: window.currentRole });
-    if (result) appendOutput(result);
-  } catch (err) {
-    appendOutput(`⚠️ خطأ أثناء تنفيذ الأمر: ${err.message}`);
-  }
+  return parts.join("/");
 }
 
-// 🔹 دالة لطباعة النتائج
-function appendOutput(text) {
-  const output = document.getElementById("terminal-output");
-  if (!output) return;
-  const line = document.createElement("div");
-  line.textContent = text;
-  output.appendChild(line);
-  output.scrollTop = output.scrollHeight;
-}
-
-// 🔹 حدث الإدخال (Enter)
-document.addEventListener("DOMContentLoaded", () => {
-  const input = document.getElementById("terminal-input");
-  if (!input) return;
-
-  input.addEventListener("keydown", async (e) => {
-    if (e.key === "Enter") {
-      const command = input.value.trim();
-      appendOutput(`> ${command}`);
-      input.value = "";
-      await handleCommand(command);
+// 🔹 دالة مساعدة لعرض الملفات بشكل شجري من Google Drive API
+function formatTree(files, level = 0) {
+  const indent = "   ".repeat(level);
+  let output = "";
+  files.forEach(f => {
+    if (f.mimeType === "folder") {
+      output += `${indent}📁 [${f.name}]\n`;
+      if (f.children && f.children.length > 0) {
+        output += formatTree(f.children, level + 1);
+      }
+    } else {
+      output += `${indent}📄 ${f.name}\n`;
     }
   });
-});
+  return output;
+}
+
+// 🔸 تغيير المجلد الحالي
+COMMANDS.cd = {
+  description: "تغيير المجلد الحالي",
+  restricted: true,
+  action: async ({ role, args }) => {
+    if (role === "user") return " Insufficient privileges.";
+    const folderName = args[0];
+    if (!folderName) return "Usage: cd <folderName>";
+
+    const newPath = resolvePathCD(currentPath, folderName);
+    try {
+      const res = await fetch(`${TERMINAL_API_URL}?action=list&path=${newPath}`);
+      const files = await res.json();
+      const folderExists = folderName === ".." || folderName === "." || files.some(f => f.mimeType === "folder");
+      if (!folderExists) return ` Folder not found: ${folderName}`;
+      currentPath = newPath;
+      return `📂 Moved to [${currentPath || "~"}]`;
+    } catch (err) {
+      return `⚠️ Error: ${err}`;
+    }
+  }
+};
+
+// 🔸 عرض الملفات والمجلدات
+COMMANDS.list = {
+  description: "عرض الملفات والمجلدات",
+  restricted: true,
+  action: async ({ role, args }) => {
+    if (role === "user") return " Insufficient privileges.";
+
+    let flags = { id: false, url: false, all: false, txt: false, js: false, doc: false, pdf: false, json: false };
+    let searchTerms = [];
+    let expectSearch = false;
+
+    // تحليل الوسوم والكلمات
+    for (let i = 0; i < args.length; i++) {
+      const arg = args[i].toLowerCase();
+      if (arg === "-id") flags.id = true;
+      else if (arg === "-url") flags.url = true;
+      else if (arg === "--all") flags.all = true;
+      else if (arg === "--txt") flags.txt = true;
+      else if (arg === "--js") flags.js = true;
+      else if (arg === "--doc") flags.doc = true;
+      else if (arg === "--pdf") flags.pdf = true;
+      else if (arg === "--json") flags.json = true;
+      else if (arg === "-n") expectSearch = true;
+      else {
+        if (expectSearch) {
+          searchTerms.push(arg.toLowerCase());
+          expectSearch = false;
+        } else {
+          // إذا كتبت كلمة بدون -n مسبق، البحث فقط في المجلد الحالي
+          searchTerms.push(arg.toLowerCase());
+        }
+      }
+    }
+
+    const path = currentPath || "";
+    try {
+      const res = await fetch(`${TERMINAL_API_URL}?action=list&path=${path}`);
+      const files = await res.json();
+      if (!Array.isArray(files) || !files.length) return "📭 No files or folders.";
+
+      let filtered = files.filter(f => {
+        if (f.mimeType === "folder") return true;
+        const ext = f.name.split(".").pop().toLowerCase();
+        if (flags.all) return true;
+        if (flags.txt && ext !== "txt") return false;
+        if (flags.js && ext !== "js") return false;
+        if (flags.doc && !["doc", "docx"].includes(ext)) return false;
+        if (flags.pdf && ext !== "pdf") return false;
+        if (flags.json && ext !== "json") return false;
+        return !flags.txt && !flags.js && !flags.doc && !flags.pdf && !flags.json;
+      });
+
+      if (searchTerms.length) {
+        if (!flags.all) {
+          filtered = filtered.filter(f =>
+            searchTerms.every(term => f.name.toLowerCase().includes(term))
+          );
+        } else {
+          // بحث داخل كل الشجرة
+          // نحتاج API لتدعم children
+        }
+      }
+
+      return formatTree(filtered);
+    } catch (err) {
+      return `⚠️ Error: ${err}`;
+    }
+  }
+};
+
+// 🔸 إنشاء مجلد
+COMMANDS.mkdir = {
+  description: "إنشاء مجلد جديد في Google Drive",
+  restricted: true,
+  action: async ({ role, args }) => {
+    if (role === "user") return " Insufficient privileges.";
+    const folderName = args[0];
+    if (!folderName) return "Usage: mkdir <folderName>";
+    const path = currentPath ? `${currentPath}/${folderName}` : folderName;
+    const res = await fetch(`${TERMINAL_API_URL}?action=mkdir&path=${path}`);
+    return await res.text();
+  }
+};
+
+// 🔸 إنشاء ملف
+COMMANDS.create = {
+  description: "إنشاء ملف جديد (يدعم المسارات)",
+  restricted: true,
+  action: async ({ role, args }) => {
+    if (role === "user") return " Insufficient privileges.";
+    const filePath = args[0];
+    if (!filePath) return "Usage: create <path/filename>";
+    const path = currentPath ? `${currentPath}/${filePath}` : filePath;
+    const res = await fetch(`${TERMINAL_API_URL}?action=create&path=${path}`);
+    return await res.text();
+  }
+};
+
+// 🔸 تحديث أو إنشاء ملف بمحتوى
+COMMANDS.update = {
+  description: "تحديث أو إنشاء ملف (يدعم المسارات)",
+  restricted: true,
+  action: async ({ role, args, rawInput }) => {
+    if (role === "user") return " Insufficient privileges.";
+    const [filePath, ...rest] = args;
+    if (!filePath) return "Usage: update <path/filename> <content>";
+    const path = currentPath ? `${currentPath}/${filePath}` : filePath;
+    const contentStart = rawInput.indexOf(filePath) + filePath.length;
+    const content = rawInput.slice(contentStart).trim();
+    const res = await fetch(`${TERMINAL_API_URL}?action=update&path=${path}&data=${encodeURIComponent(content)}`);
+    return await res.text();
+  }
+};
+
+// 🔸 حذف ملف أو مجلد
+COMMANDS.delete = {
+  description: "حذف ملف أو مجلد",
+  restricted: true,
+  action: async ({ role, args }) => {
+    if (role === "user") return " Insufficient privileges.";
+    const filePath = args[0];
+    if (!filePath) return "Usage: delete <path>";
+    const path = currentPath ? `${currentPath}/${filePath}` : filePath;
+    const res = await fetch(`${TERMINAL_API_URL}?action=delete&path=${path}`);
+    return await res.text();
+  }
+};
