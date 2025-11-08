@@ -7,9 +7,6 @@ window.currentRole = window.currentRole || "user";
 
 
 
-// ============ ⚡️ AdminShell Commands (Full Updated) ============
-const COMMANDS = {};
-
 // 🔹 عرض الأوامر
 COMMANDS.help = {
   description: "عرض جميع الأوامر المتاحة",
