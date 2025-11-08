@@ -1,4 +1,5 @@
-// ============ ⚡️ AdminShell Commands (Full Updated) ============
+// ============ ⚡️ AdminShell Commands (Enhanced) ============
+
 const COMMANDS = {};
 
 // 🔹 عرض الأوامر
@@ -55,29 +56,7 @@ COMMANDS.echo = {
 // 🔐 أوامر الإدارة (admin / root)
 // ===================================================
 
-// 🔹 cd
-COMMANDS.cd = {
-  description: "تغيير المجلد الحالي",
-  restricted: true,
-  action: async ({ role, args }) => {
-    if (role === "user") return " Insufficient privileges.";
-    const target = args[0];
-    if (!target) return "Usage: cd <folder>";
-    const newPath = resolvePathCD(currentPath, target);
-
-    // تحقق من وجود المجلد
-    const res = await fetch(`${TERMINAL_API_URL}?action=list&path=${newPath}`);
-    const files = await res.json();
-    if (!Array.isArray(files) || !files.some(f => f.mimeType === "folder")) {
-      return ` Folder not found: ${target}`;
-    }
-
-    currentPath = newPath;
-    return `📂 Moved to [${getLastPart(newPath) || '~'}]`;
-  }
-};
-
-// 🔹 mkdir
+// 🔸 إنشاء مجلد
 COMMANDS.mkdir = {
   description: "إنشاء مجلد جديد في Google Drive",
   restricted: true,
@@ -85,94 +64,78 @@ COMMANDS.mkdir = {
     if (role === "user") return " Insufficient privileges.";
     const folderName = args[0];
     if (!folderName) return "Usage: mkdir <folderName>";
-    const path = currentPath ? `${currentPath}/${folderName}` : folderName;
-    const res = await fetch(`${TERMINAL_API_URL}?action=mkdir&path=${path}`);
+
+    const res = await fetch(`${TERMINAL_API_URL}?action=mkdir&path=${folderName}`);
     return await res.text();
   }
 };
 
-// 🔹 list
+// 🔸 عرض الملفات (يدعم المسار والمجلدات)
 COMMANDS.list = {
-  description: "عرض الملفات والمجلدات مع دعم --all و -n للبحث",
+  description: "عرض الملفات والمجلدات",
   restricted: true,
   action: async ({ role, args }) => {
     if (role === "user") return " Insufficient privileges.";
 
-    let flags = { all: false, txt: false, js: false, doc: false, pdf: false, json: false, id: false, url: false };
-    let searchTerm = null;
+    const targetPath = args.find(a => !a.startsWith("-") && !a.startsWith("--") && !a.startsWith("-n"));
+    const res = await fetch(`${TERMINAL_API_URL}?action=list&path=${targetPath || ""}`);
+    const files = await res.json();
+
+    if (!Array.isArray(files) || !files.length) return " No files or folders found.";
+
+    let flags = { id: false, url: false, all: false, txt: false, js: false, doc: false, pdf: false, json: false };
+    let searchTerms = [];
     let expectSearch = false;
-    let targetPath = currentPath;
 
     for (let i = 0; i < args.length; i++) {
       const arg = args[i].toLowerCase();
-      if (arg === "--all") flags.all = true;
+      if (arg === "-id") flags.id = true;
+      else if (arg === "-url") flags.url = true;
+      else if (arg === "--all") flags.all = true;
       else if (arg === "--txt") flags.txt = true;
       else if (arg === "--js") flags.js = true;
       else if (arg === "--doc") flags.doc = true;
       else if (arg === "--pdf") flags.pdf = true;
       else if (arg === "--json") flags.json = true;
-      else if (arg === "-id") flags.id = true;
-      else if (arg === "-url") flags.url = true;
       else if (arg === "-n") expectSearch = true;
       else {
         if (expectSearch) {
-          searchTerm = arg;
+          searchTerms.push(arg.toLowerCase());
           expectSearch = false;
         } else {
-          targetPath = resolvePathCD(currentPath, arg);
+          return " Unknown command or invalid usage";
         }
       }
     }
 
-    const fetchFiles = async (path) => {
-      const res = await fetch(`${TERMINAL_API_URL}?action=list&path=${path}`);
-      const files = await res.json();
-      return Array.isArray(files) ? files : [];
-    };
-
-    const filterByExt = f => {
-      if (f.mimeType === "folder") return true;
+    let filtered = files.filter(f => {
+      if (f.mimeType === "folder") return true; // أظهر المجلدات دائمًا
       const ext = f.name.split(".").pop().toLowerCase();
       if (flags.all) return true;
       if (flags.txt && ext !== "txt") return false;
       if (flags.js && ext !== "js") return false;
-      if (flags.doc && !["doc","docx"].includes(ext)) return false;
+      if (flags.doc && !["doc", "docx"].includes(ext)) return false;
       if (flags.pdf && ext !== "pdf") return false;
       if (flags.json && ext !== "json") return false;
       return !flags.txt && !flags.js && !flags.doc && !flags.pdf && !flags.json;
-    };
+    });
 
-    const printTree = async (path, indent = "") => {
-      let files = await fetchFiles(path);
-      if (searchTerm && !flags.all) {
-        files = files.filter(f => f.name.toLowerCase().includes(searchTerm));
-      }
+    if (searchTerms.length) {
+      filtered = filtered.filter(f =>
+        searchTerms.every(term => f.name.toLowerCase().includes(term))
+      );
+    }
 
-      let lines = [];
-      for (const f of files) {
-        if (!filterByExt(f)) continue;
-        const isFolder = f.mimeType === "folder";
-        const name = isFolder ? `📂 [${f.name}]` : `📄 ${f.name}`;
-        let line = indent + name;
-        if (flags.id) line += ` | 🆔 ${f.id}`;
-        if (flags.url) line += ` | 🔗 ${f.url}`;
-        lines.push(line);
-
-        if (isFolder && flags.all) {
-          const subPath = path ? `${path}/${f.name}` : f.name;
-          const subLines = await printTree(subPath, indent + "  ");
-          lines.push(...subLines);
-        }
-      }
-      return lines;
-    };
-
-    const output = await printTree(targetPath);
-    return output.length ? output.join("\n") : " No matching files or folders found.";
+    return filtered.map(f => {
+      const parts = [f.name + (f.mimeType === "folder" ? "/" : "")];
+      if (flags.id) parts.push(`🆔 ${f.id}`);
+      if (flags.url) parts.push(`🔗 ${f.url}`);
+      return parts.join(" | ");
+    }).join("\n");
   }
 };
 
-// 🔹 create
+// 🔸 إنشاء ملف
 COMMANDS.create = {
   description: "إنشاء ملف جديد (يدعم المسارات)",
   restricted: true,
@@ -180,13 +143,12 @@ COMMANDS.create = {
     if (role === "user") return " Insufficient privileges.";
     const path = args[0];
     if (!path) return "Usage: create <path/filename>";
-    const fullPath = currentPath ? `${currentPath}/${path}` : path;
-    const res = await fetch(`${TERMINAL_API_URL}?action=create&path=${fullPath}`);
+    const res = await fetch(`${TERMINAL_API_URL}?action=create&path=${path}`);
     return await res.text();
   }
 };
 
-// 🔹 update
+// 🔸 تحديث أو إنشاء ملف بمحتوى
 COMMANDS.update = {
   description: "تحديث أو إنشاء ملف (يدعم المسارات)",
   restricted: true,
@@ -197,13 +159,13 @@ COMMANDS.update = {
 
     const contentStart = rawInput.indexOf(path) + path.length;
     const content = rawInput.slice(contentStart).trim();
-    const fullPath = currentPath ? `${currentPath}/${path}` : path;
-    const res = await fetch(`${TERMINAL_API_URL}?action=update&path=${fullPath}&data=${encodeURIComponent(content)}`);
+
+    const res = await fetch(`${TERMINAL_API_URL}?action=update&path=${path}&data=${encodeURIComponent(content)}`);
     return await res.text();
   }
 };
 
-// 🔹 delete
+// 🔸 حذف ملف أو مجلد
 COMMANDS.delete = {
   description: "حذف ملف أو مجلد",
   restricted: true,
@@ -211,28 +173,7 @@ COMMANDS.delete = {
     if (role === "user") return " Insufficient privileges.";
     const path = args[0];
     if (!path) return "Usage: delete <path>";
-    const fullPath = currentPath ? `${currentPath}/${path}` : path;
-    const res = await fetch(`${TERMINAL_API_URL}?action=delete&path=${fullPath}`);
+    const res = await fetch(`${TERMINAL_API_URL}?action=delete&path=${path}`);
     return await res.text();
   }
 };
-
-// ===================================================
-// 🔹 دوال مساعدة
-function getLastPart(path) {
-  if (!path) return "";
-  const parts = path.split("/").filter(Boolean);
-  return parts[parts.length - 1] || "";
-}
-
-function resolvePathCD(base, target) {
-  if (!target) return base;
-  let parts = base.split("/").filter(Boolean);
-
-  const segments = target.split("/").filter(Boolean);
-  for (const seg of segments) {
-    if (seg === "..") parts.pop();
-    else if (seg !== ".") parts.push(seg);
-  }
-  return parts.join("/");
-}
