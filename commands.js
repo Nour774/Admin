@@ -1,17 +1,15 @@
-// ============ ⚡️ AdminShell (Stable v3) ============
+// ============ ⚡️ AdminShell Commands (Fixed & Integrated) ============
 
-// الحالة العامة للنظام
-let currentPath = "";        // المسار الحالي
-let currentRole = "user";    // الوضع الحالي
-const TERMINAL_API_URL = "https://your-api-endpoint.com"; // غيّر هذا إلى عنوان سكربتك
+// 🧠 المتغيرات العامة (متوافق مع ملف terminal)
+let currentPath = currentPath || "";
+let currentRole = currentRole || "user";
+const TERMINAL_API_URL = TERMINAL_API_URL || "https://script.google.com/macros/s/AKfycbzhYVvS4iAGVnA3N69kyVAJvTZgEKv82fMbcODr3CEpcxzcQ3MUnHOkj0fs4TGJDDBM/exec";
 
-// تعريف الأوامر
 const COMMANDS = {};
 
 // ===================================================
-// 🧩 أوامر عامة
+// 🔹 أوامر عامة
 // ===================================================
-
 COMMANDS.help = {
   description: "عرض جميع الأوامر المتاحة",
   action: async ({ role }) => {
@@ -23,15 +21,14 @@ COMMANDS.help = {
 };
 
 // ===================================================
-// 🔐 الصلاحيات
+// 🔐 صلاحيات
 // ===================================================
-
 COMMANDS.sudo = {
   description: "رفع الصلاحية إلى admin",
-  action: async ({ args }) => {
+  action: async ({ args, switchRole }) => {
     if (args[0] !== "su") return "Usage: sudo su";
-    currentRole = "admin";
-    return "✅ Switched to ADMIN mode.";
+    await switchRole("admin");
+    return null;
   }
 };
 
@@ -44,24 +41,23 @@ COMMANDS.exit = {
 };
 
 // ===================================================
-// 📂 التنقل وإنشاء المجلدات
+// 📂 التنقل وإدارة الملفات
 // ===================================================
-
 COMMANDS.cd = {
   description: "تغيير المجلد الحالي",
   restricted: true,
   action: async ({ args }) => {
     if (currentRole === "user") return " Insufficient privileges.";
-
     const target = args[0];
     if (!target) return "Usage: cd <folder>";
 
     const newPath = resolvePathCD(currentPath, target);
-
     const res = await fetch(`${TERMINAL_API_URL}?action=list&path=${newPath}`);
     const files = await res.json();
 
-    if (!Array.isArray(files)) return ` Folder not found: ${target}`;
+    if (!Array.isArray(files) || !files.some(f => f.mimeType === "folder")) {
+      return ` Folder not found: ${target}`;
+    }
 
     currentPath = newPath;
     return `📂 Moved to [${getLastPart(newPath) || '~'}]`;
@@ -75,7 +71,6 @@ COMMANDS.mkdir = {
     if (currentRole === "user") return " Insufficient privileges.";
     const name = args[0];
     if (!name) return "Usage: mkdir <name>";
-
     const path = currentPath ? `${currentPath}/${name}` : name;
     const res = await fetch(`${TERMINAL_API_URL}?action=mkdir&path=${path}`);
     return await res.text();
@@ -83,11 +78,10 @@ COMMANDS.mkdir = {
 };
 
 // ===================================================
-// 📜 عرض الملفات (list)
+// 📜 list (عرض الملفات والمجلدات) - مُحدّث بالكامل
 // ===================================================
-
 COMMANDS.list = {
-  description: "عرض الملفات والمجلدات (يدعم --all و -n)",
+  description: "عرض الملفات والمجلدات مع دعم --all و -n",
   restricted: true,
   action: async ({ args }) => {
     if (currentRole === "user") return " Insufficient privileges.";
@@ -96,30 +90,35 @@ COMMANDS.list = {
     let searchTerm = null;
     let targetPath = currentPath;
 
+    // معالجة الوسائط
     for (let i = 0; i < args.length; i++) {
       const arg = args[i];
       if (arg === "--all") flags.all = true;
-      else if (arg === "-n") searchTerm = args[i + 1];
+      else if (arg === "-n" && args[i+1]) {
+        searchTerm = args[i+1];
+        i++;
+      }
       else if (!arg.startsWith("-")) targetPath = resolvePathCD(currentPath, arg);
     }
 
+    // جلب الملفات من API
     const fetchFiles = async (path) => {
       const res = await fetch(`${TERMINAL_API_URL}?action=list&path=${path}`);
       const data = await res.json();
       return Array.isArray(data) ? data : [];
     };
 
+    // طباعة شجرة الملفات والمجلدات
     const printTree = async (path, prefix = "") => {
       const files = await fetchFiles(path);
       let output = [];
 
       for (const f of files) {
-        const isFolder = f.mimeType === "folder";
         if (searchTerm && !f.name.toLowerCase().includes(searchTerm.toLowerCase())) continue;
 
+        const isFolder = f.mimeType === "folder";
         const icon = isFolder ? "📁" : "📄";
-        const color = isFolder ? "\x1b[36m" : "\x1b[37m";
-        output.push(`${prefix}${color}${icon} ${f.name}\x1b[0m`);
+        output.push(`${prefix}${icon} ${f.name}`);
 
         if (isFolder && flags.all) {
           const subPath = path ? `${path}/${f.name}` : f.name;
@@ -138,7 +137,6 @@ COMMANDS.list = {
 // ===================================================
 // 🧾 إنشاء وتحديث الملفات
 // ===================================================
-
 COMMANDS.create = {
   description: "إنشاء ملف جديد",
   restricted: true,
@@ -169,7 +167,6 @@ COMMANDS.update = {
 // ===================================================
 // 🗑️ حذف الملفات أو المجلدات
 // ===================================================
-
 COMMANDS.delete = {
   description: "حذف ملف أو مجلد",
   restricted: true,
@@ -186,7 +183,6 @@ COMMANDS.delete = {
 // ===================================================
 // 🧠 دوال مساعدة
 // ===================================================
-
 function getLastPart(path) {
   if (!path) return "";
   const parts = path.split("/").filter(Boolean);
