@@ -1,4 +1,4 @@
-// ============ ⚡️ AdminShell Commands (Advanced + Paths) ============
+// ============ ⚡️ AdminShell Commands (Advanced) ============
 let currentPath = ""; // المسار الحالي
 
 const COMMANDS = {};
@@ -65,17 +65,15 @@ COMMANDS.cd = {
     if (role === "user") return "❌ Insufficient privileges.";
     const target = args[0];
     if (!target) return "Usage: cd <folder>";
-    
+
     const newPath = resolvePathCD(currentPath, target);
     const res = await fetch(`${TERMINAL_API_URL}?action=list&path=${newPath}`);
     const files = await res.json();
-    
     if (!Array.isArray(files) || !files.some(f => f.mimeType === "folder")) {
       return `❌ Folder not found: ${target}`;
     }
-
     currentPath = newPath;
-    return `📂 Current path: ${currentPath || "~"}`;
+    return `📂 Moved to [${getLastPart(newPath) || "~"}]`;
   }
 };
 
@@ -95,7 +93,7 @@ COMMANDS.mkdir = {
 
 // 🔹 list
 COMMANDS.list = {
-  description: "عرض الملفات والمجلدات مع دعم البحث والمرشحات والمسارات",
+  description: "عرض الملفات والمجلدات مع دعم البحث والمرشحات",
   restricted: true,
   action: async ({ role, args }) => {
     if (role === "user") return "❌ Insufficient privileges.";
@@ -118,12 +116,7 @@ COMMANDS.list = {
       else if (arg === "-url") flags.url = true;
       else if (arg === "-n") searchFilesOnly = true;
       else {
-        // إذا كان أول وسيط ليس من العلامات → نفترض أنه مسار
-        if (!targetPath || i === 0) {
-          targetPath = resolvePathCD(currentPath, args[i]);
-        } else {
-          searchTerm = args[i];
-        }
+        searchTerm = arg;
       }
     }
 
@@ -236,7 +229,7 @@ function getLastPart(path) {
 
 function resolvePathCD(base, target) {
   if (!target) return base || "";
-  if (target.startsWith("/")) return target; // مسار مطلق
+  if (target.startsWith("/")) return target;
   let parts = base.split("/").filter(Boolean);
   const segments = target.split("/").filter(Boolean);
   for (const seg of segments) {
@@ -244,4 +237,4 @@ function resolvePathCD(base, target) {
     else if (seg !== ".") parts.push(seg);
   }
   return parts.join("/");
-  }
+                                           }
