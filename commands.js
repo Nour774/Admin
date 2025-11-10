@@ -1,4 +1,4 @@
-// ============ ⚡️ AdminShell Commands (Advanced) ============
+// ============ ⚡️ AdminShell Commands (Final Stable Version) ============
 let currentPath = ""; // المسار الحالي
 
 const COMMANDS = {};
@@ -6,6 +6,8 @@ const COMMANDS = {};
 // ===================================================
 // 🔹 أوامر عامة
 // ===================================================
+
+// 🔹 help
 COMMANDS.help = {
   description: "عرض جميع الأوامر المتاحة",
   action: async ({ role }) => {
@@ -20,6 +22,7 @@ COMMANDS.help = {
   }
 };
 
+// 🔹 exit
 COMMANDS.exit = {
   description: "العودة إلى user",
   action: async ({ role }) => {
@@ -32,6 +35,7 @@ COMMANDS.exit = {
   }
 };
 
+// 🔹 sudo
 COMMANDS.sudo = {
   description: "رفع الصلاحية إلى admin",
   action: async ({ args, switchRole }) => {
@@ -40,6 +44,7 @@ COMMANDS.sudo = {
   }
 };
 
+// 🔹 su
 COMMANDS.su = {
   description: "رفع الصلاحية إلى root",
   action: async ({ args, switchRole }) => {
@@ -48,6 +53,7 @@ COMMANDS.su = {
   }
 };
 
+// 🔹 echo
 COMMANDS.echo = {
   description: "إعادة النص كما هو",
   action: async ({ args }) => args.join(" "),
@@ -67,11 +73,14 @@ COMMANDS.cd = {
     if (!target) return "Usage: cd <folder>";
 
     const newPath = resolvePathCD(currentPath, target);
+
+    // تحقق من وجود المجلد عبر API
     const res = await fetch(`${TERMINAL_API_URL}?action=list&path=${newPath}`);
     const files = await res.json();
-    if (!Array.isArray(files) || !files.some(f => f.mimeType === "folder")) {
+    if (!Array.isArray(files) || !files.some(f => f.mimeType === "folder" || f.mimeType === "application/vnd.google-apps.folder")) {
       return `❌ Folder not found: ${target}`;
     }
+
     currentPath = newPath;
     return `📂 Moved to [${getLastPart(newPath) || "~"}]`;
   }
@@ -93,14 +102,14 @@ COMMANDS.mkdir = {
 
 // 🔹 list
 COMMANDS.list = {
-  description: "عرض الملفات والمجلدات مع دعم البحث والمرشحات",
+  description: "عرض الملفات والمجلدات مع دعم --all و -n للبحث",
   restricted: true,
   action: async ({ role, args }) => {
     if (role === "user") return "❌ Insufficient privileges.";
 
     let flags = { all: false, txt: false, js: false, doc: false, pdf: false, json: false, id: false, url: false };
     let searchTerm = null;
-    let searchFilesOnly = false;
+    let expectSearch = false;
     let targetPath = currentPath;
 
     // تحليل الوسائط
@@ -114,9 +123,14 @@ COMMANDS.list = {
       else if (arg === "--json") flags.json = true;
       else if (arg === "-id") flags.id = true;
       else if (arg === "-url") flags.url = true;
-      else if (arg === "-n") searchFilesOnly = true;
+      else if (arg === "-n") expectSearch = true;
       else {
-        searchTerm = arg;
+        if (expectSearch) {
+          searchTerm = arg;
+          expectSearch = false;
+        } else {
+          targetPath = resolvePathCD(currentPath, arg);
+        }
       }
     }
 
@@ -126,32 +140,27 @@ COMMANDS.list = {
       return Array.isArray(files) ? files : [];
     };
 
-    const filterFiles = f => {
-      const isFolder = f.mimeType === "folder" || f.mimeType === "application/vnd.google-apps.folder";
-      if (searchFilesOnly) {
-        if (isFolder) return false; // تجاهل المجلدات عند البحث عن الملفات
-        if (flags.txt && !f.name.endsWith(".txt")) return false;
-        if (flags.js && !f.name.endsWith(".js")) return false;
-        if (flags.doc && ![".doc", ".docx"].some(ext => f.name.endsWith(ext))) return false;
-        if (flags.pdf && !f.name.endsWith(".pdf")) return false;
-        if (flags.json && !f.name.endsWith(".json")) return false;
-        if (searchTerm && !f.name.toLowerCase().includes(searchTerm.toLowerCase())) return false;
-        return true;
-      } else {
-        // بحث في المجلدات فقط
-        if (!isFolder) return false;
-        if (searchTerm && !f.name.toLowerCase().includes(searchTerm.toLowerCase())) return false;
-        return true;
-      }
+    const filterByExt = f => {
+      if (f.mimeType === "folder" || f.mimeType === "application/vnd.google-apps.folder") return true;
+      const ext = f.name.split(".").pop().toLowerCase();
+      if (flags.all) return true;
+      if (flags.txt && ext !== "txt") return false;
+      if (flags.js && ext !== "js") return false;
+      if (flags.doc && !["doc", "docx"].includes(ext)) return false;
+      if (flags.pdf && ext !== "pdf") return false;
+      if (flags.json && ext !== "json") return false;
+      return !flags.txt && !flags.js && !flags.doc && !flags.pdf && !flags.json;
     };
 
     const printTree = async (path, indent = "") => {
       let files = await fetchFiles(path);
-      files = files.filter(filterFiles);
+      if (searchTerm && !flags.all) {
+        files = files.filter(f => f.name.toLowerCase().includes(searchTerm));
+      }
 
       let lines = [];
-      for (let i = 0; i < files.length; i++) {
-        const f = files[i];
+      for (const f of files) {
+        if (!filterByExt(f)) continue;
         const isFolder = f.mimeType === "folder" || f.mimeType === "application/vnd.google-apps.folder";
         const name = isFolder ? `📂 [${f.name}]` : `📄 ${f.name}`;
         let line = indent + name;
@@ -237,4 +246,4 @@ function resolvePathCD(base, target) {
     else if (seg !== ".") parts.push(seg);
   }
   return parts.join("/");
-                                           }
+  }
