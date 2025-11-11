@@ -1,4 +1,4 @@
-// ============ ⚡️ AdminShell Commands (Final Stable Version) ============
+// ============ ⚡️ AdminShell Commands (Complete Version) ============
 let currentPath = ""; // المسار الحالي
 
 const COMMANDS = {};
@@ -12,11 +12,7 @@ COMMANDS.help = {
   description: "عرض جميع الأوامر المتاحة",
   action: async ({ role }) => {
     return Object.keys(COMMANDS)
-      .filter(cmd => {
-        const c = COMMANDS[cmd];
-        if (c.restricted && role === "user") return false;
-        return true;
-      })
+      .filter(cmd => !(COMMANDS[cmd].restricted && role === "user"))
       .map(cmd => `• ${cmd} - ${COMMANDS[cmd].description}`)
       .join("\n");
   }
@@ -82,13 +78,13 @@ COMMANDS.cd = {
     }
 
     currentPath = newPath;
-    return `📂 Moved to [${getLastPart(newPath) || "~"}]`;
+    return `📂 Moved to [${currentPath || "~"}]`;
   }
 };
 
 // 🔹 mkdir
 COMMANDS.mkdir = {
-  description: "إنشاء مجلد جديد في Google Drive",
+  description: "إنشاء مجلد جديد",
   restricted: true,
   action: async ({ role, args }) => {
     if (role === "user") return "❌ Insufficient privileges.";
@@ -102,17 +98,17 @@ COMMANDS.mkdir = {
 
 // 🔹 list
 COMMANDS.list = {
-  description: "عرض الملفات والمجلدات مع دعم --all و -n للبحث",
+  description: "عرض الملفات والمجلدات مع دعم البحث والتصفية",
   restricted: true,
   action: async ({ role, args }) => {
     if (role === "user") return "❌ Insufficient privileges.";
 
     let flags = { all: false, txt: false, js: false, doc: false, pdf: false, json: false, id: false, url: false };
     let searchTerm = null;
-    let expectSearch = false;
+    let filesOnly = false;
     let targetPath = currentPath;
+    let expectSearch = false;
 
-    // تحليل الوسائط
     for (let i = 0; i < args.length; i++) {
       const arg = args[i].toLowerCase();
       if (arg === "--all") flags.all = true;
@@ -123,7 +119,7 @@ COMMANDS.list = {
       else if (arg === "--json") flags.json = true;
       else if (arg === "-id") flags.id = true;
       else if (arg === "-url") flags.url = true;
-      else if (arg === "-n") expectSearch = true;
+      else if (arg === "-n") filesOnly = true;
       else {
         if (expectSearch) {
           searchTerm = arg;
@@ -140,30 +136,31 @@ COMMANDS.list = {
       return Array.isArray(files) ? files : [];
     };
 
-    const filterByExt = f => {
-      if (f.mimeType === "folder" || f.mimeType === "application/vnd.google-apps.folder") return true;
-      const ext = f.name.split(".").pop().toLowerCase();
+    const filterByType = f => {
+      const isFolder = f.mimeType === "folder" || f.mimeType === "application/vnd.google-apps.folder";
+      if (filesOnly) return !isFolder; // إذا البحث عن ملفات فقط
+      if (!filesOnly && !flags.all) return isFolder; // إذا البحث عن مجلدات فقط
       if (flags.all) return true;
+      const ext = f.name.split(".").pop().toLowerCase();
       if (flags.txt && ext !== "txt") return false;
       if (flags.js && ext !== "js") return false;
-      if (flags.doc && !["doc", "docx"].includes(ext)) return false;
+      if (flags.doc && !["doc","docx"].includes(ext)) return false;
       if (flags.pdf && ext !== "pdf") return false;
       if (flags.json && ext !== "json") return false;
-      return !flags.txt && !flags.js && !flags.doc && !flags.pdf && !flags.json;
+      return true;
     };
 
     const printTree = async (path, indent = "") => {
       let files = await fetchFiles(path);
-      if (searchTerm && !flags.all) {
+      if (searchTerm) {
         files = files.filter(f => f.name.toLowerCase().includes(searchTerm));
       }
 
       let lines = [];
       for (const f of files) {
-        if (!filterByExt(f)) continue;
+        if (!filterByType(f)) continue;
         const isFolder = f.mimeType === "folder" || f.mimeType === "application/vnd.google-apps.folder";
-        const name = isFolder ? `📂 [${f.name}]` : `📄 ${f.name}`;
-        let line = indent + name;
+        let line = indent + (isFolder ? `📂 [${f.name}]` : `📄 ${f.name}`);
         if (flags.id) line += ` | 🆔 ${f.id}`;
         if (flags.url) line += ` | 🔗 ${f.url}`;
         lines.push(line);
@@ -202,9 +199,8 @@ COMMANDS.update = {
   restricted: true,
   action: async ({ role, args, rawInput }) => {
     if (role === "user") return "❌ Insufficient privileges.";
-    const [path, ...rest] = args;
+    const [path] = args;
     if (!path) return "Usage: update <path/filename> <content>";
-
     const contentStart = rawInput.indexOf(path) + path.length;
     const content = rawInput.slice(contentStart).trim();
     const fullPath = currentPath ? `${currentPath}/${path}` : path;
@@ -246,4 +242,4 @@ function resolvePathCD(base, target) {
     else if (seg !== ".") parts.push(seg);
   }
   return parts.join("/");
-  }
+}
