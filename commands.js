@@ -1,6 +1,5 @@
-// ============ ⚡️ AdminShell Commands (Complete Version) ============
+// ============ ⚡️ AdminShell Commands (Drive Integrated Version) ============
 let currentPath = ""; // المسار الحالي
-
 const COMMANDS = {};
 
 // ===================================================
@@ -12,7 +11,11 @@ COMMANDS.help = {
   description: "عرض جميع الأوامر المتاحة",
   action: async ({ role }) => {
     return Object.keys(COMMANDS)
-      .filter(cmd => !(COMMANDS[cmd].restricted && role === "user"))
+      .filter(cmd => {
+        const c = COMMANDS[cmd];
+        if (c.restricted && role === "user") return false;
+        return true;
+      })
       .map(cmd => `• ${cmd} - ${COMMANDS[cmd].description}`)
       .join("\n");
   }
@@ -65,26 +68,24 @@ COMMANDS.cd = {
   restricted: true,
   action: async ({ role, args }) => {
     if (role === "user") return "❌ Insufficient privileges.";
+
     const target = args[0];
-    if (!target) return "Usage: cd <folder>";
+    if (!target) return `📂 المسار الحالي: [${currentPath || "~"}]`;
 
     const newPath = resolvePathCD(currentPath, target);
-
-    // تحقق من وجود المجلد عبر API
     const res = await fetch(`${TERMINAL_API_URL}?action=list&path=${newPath}`);
     const files = await res.json();
-    if (!Array.isArray(files) || !files.some(f => f.mimeType === "folder" || f.mimeType === "application/vnd.google-apps.folder")) {
-      return `❌ Folder not found: ${target}`;
-    }
 
+    if (!Array.isArray(files)) return `❌ Folder not found: ${target}`;
     currentPath = newPath;
-    return `📂 Moved to [${currentPath || "~"}]`;
+
+    return `📂 تم الانتقال إلى [${currentPath || "~"}]`;
   }
 };
 
 // 🔹 mkdir
 COMMANDS.mkdir = {
-  description: "إنشاء مجلد جديد",
+  description: "إنشاء مجلد جديد في Google Drive",
   restricted: true,
   action: async ({ role, args }) => {
     if (role === "user") return "❌ Insufficient privileges.";
@@ -98,17 +99,26 @@ COMMANDS.mkdir = {
 
 // 🔹 list
 COMMANDS.list = {
-  description: "عرض الملفات والمجلدات مع دعم البحث والتصفية",
+  description: "عرض الملفات والمجلدات (يدعم الوسوم والبحث والمسارات)",
   restricted: true,
   action: async ({ role, args }) => {
     if (role === "user") return "❌ Insufficient privileges.";
 
-    let flags = { all: false, txt: false, js: false, doc: false, pdf: false, json: false, id: false, url: false };
-    let searchTerm = null;
-    let filesOnly = false;
-    let targetPath = currentPath;
-    let expectSearch = false;
+    let flags = {
+      all: false,
+      txt: false,
+      js: false,
+      doc: false,
+      pdf: false,
+      json: false,
+      showPath: false
+    };
 
+    let searchFile = null;
+    let searchFolder = null;
+    let targetPath = currentPath;
+
+    // تحليل الوسائط
     for (let i = 0; i < args.length; i++) {
       const arg = args[i].toLowerCase();
       if (arg === "--all") flags.all = true;
@@ -117,17 +127,10 @@ COMMANDS.list = {
       else if (arg === "--doc") flags.doc = true;
       else if (arg === "--pdf") flags.pdf = true;
       else if (arg === "--json") flags.json = true;
-      else if (arg === "-id") flags.id = true;
-      else if (arg === "-url") flags.url = true;
-      else if (arg === "-n") filesOnly = true;
-      else {
-        if (expectSearch) {
-          searchTerm = arg;
-          expectSearch = false;
-        } else {
-          targetPath = resolvePathCD(currentPath, arg);
-        }
-      }
+      else if (arg === "-p") flags.showPath = true;
+      else if (arg === "-n") searchFile = args[++i]?.toLowerCase() || "";
+      else if (arg === "+n") searchFolder = args[++i]?.toLowerCase() || "";
+      else targetPath = resolvePathCD(currentPath, arg);
     }
 
     const fetchFiles = async (path) => {
@@ -136,33 +139,34 @@ COMMANDS.list = {
       return Array.isArray(files) ? files : [];
     };
 
-    const filterByType = f => {
-      const isFolder = f.mimeType === "folder" || f.mimeType === "application/vnd.google-apps.folder";
-      if (filesOnly) return !isFolder; // إذا البحث عن ملفات فقط
-      if (!filesOnly && !flags.all) return isFolder; // إذا البحث عن مجلدات فقط
-      if (flags.all) return true;
+    const filterByExt = f => {
+      if (f.mimeType === "folder" || f.mimeType === "application/vnd.google-apps.folder")
+        return !searchFile;
       const ext = f.name.split(".").pop().toLowerCase();
       if (flags.txt && ext !== "txt") return false;
       if (flags.js && ext !== "js") return false;
-      if (flags.doc && !["doc","docx"].includes(ext)) return false;
+      if (flags.doc && !["doc", "docx"].includes(ext)) return false;
       if (flags.pdf && ext !== "pdf") return false;
       if (flags.json && ext !== "json") return false;
-      return true;
+      return !flags.txt && !flags.js && !flags.doc && !flags.pdf && !flags.json;
     };
 
     const printTree = async (path, indent = "") => {
       let files = await fetchFiles(path);
-      if (searchTerm) {
-        files = files.filter(f => f.name.toLowerCase().includes(searchTerm));
-      }
-
       let lines = [];
+
       for (const f of files) {
-        if (!filterByType(f)) continue;
         const isFolder = f.mimeType === "folder" || f.mimeType === "application/vnd.google-apps.folder";
-        let line = indent + (isFolder ? `📂 [${f.name}]` : `📄 ${f.name}`);
-        if (flags.id) line += ` | 🆔 ${f.id}`;
-        if (flags.url) line += ` | 🔗 ${f.url}`;
+        const nameLower = f.name.toLowerCase();
+
+        if (searchFile && isFolder) continue;
+        if (searchFolder && !isFolder) continue;
+        if (searchFile && !nameLower.includes(searchFile)) continue;
+        if (searchFolder && !nameLower.includes(searchFolder)) continue;
+        if (!filterByExt(f)) continue;
+
+        const displayName = isFolder ? `📂 [${f.name}]` : `📄 ${f.name}`;
+        const line = indent + (flags.showPath ? `${displayName} (${path}/${f.name})` : displayName);
         lines.push(line);
 
         if (isFolder && flags.all) {
@@ -171,11 +175,12 @@ COMMANDS.list = {
           lines.push(...subLines);
         }
       }
+
       return lines;
     };
 
     const output = await printTree(targetPath);
-    return output.length ? output.join("\n") : "📁 No files or folders found.";
+    return output.length ? output.join("\n") : "📁 لا توجد ملفات أو مجلدات مطابقة.";
   }
 };
 
@@ -199,8 +204,9 @@ COMMANDS.update = {
   restricted: true,
   action: async ({ role, args, rawInput }) => {
     if (role === "user") return "❌ Insufficient privileges.";
-    const [path] = args;
+    const [path, ...rest] = args;
     if (!path) return "Usage: update <path/filename> <content>";
+
     const contentStart = rawInput.indexOf(path) + path.length;
     const content = rawInput.slice(contentStart).trim();
     const fullPath = currentPath ? `${currentPath}/${path}` : path;
@@ -226,6 +232,7 @@ COMMANDS.delete = {
 // ===================================================
 // 🔹 دوال مساعدة
 // ===================================================
+
 function getLastPart(path) {
   if (!path) return "";
   const parts = path.split("/").filter(Boolean);
@@ -235,7 +242,7 @@ function getLastPart(path) {
 function resolvePathCD(base, target) {
   if (!target) return base || "";
   if (target.startsWith("/")) return target;
-  let parts = base.split("/").filter(Boolean);
+  const parts = base.split("/").filter(Boolean);
   const segments = target.split("/").filter(Boolean);
   for (const seg of segments) {
     if (seg === "..") parts.pop();
@@ -243,3 +250,13 @@ function resolvePathCD(base, target) {
   }
   return parts.join("/");
 }
+
+// ===================================================
+// 🔹 تعديل موجه الأوامر لعرض المسار الحالي (مثل Kali أو PowerShell)
+// ===================================================
+const originalWritePrompt = writePrompt;
+writePrompt = function () {
+  const color = roles[currentRole];
+  const displayPath = currentPath || "~";
+  term.write(`\r\n\x1b[38;2;${hexToRgb(color)}m${currentRole}@system:${displayPath}${currentRole === 'user' ? '$' : '#'} \x1b[0m `);
+};
