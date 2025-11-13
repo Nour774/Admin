@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title> رفع المانجا | MangaSanctum</title>
+  <style>
+    body {
+      font-family: "Segoe UI", Tahoma, sans-serif;
+      background: radial-gradient(circle at top left, #1b1b2f, #151515);
+      color: #eee;
+      max-width: 800px;
+      margin: 40px auto;
+      padding: 20px;
+      border-radius: 16px;
+      box-shadow: 0 0 20px rgba(0, 0, 0, 0.4);
+    }
+    h1, h3 {
+      color: #8ef;
+      text-align: center;
+    }
+    form {
+      display: flex;
+      flex-direction: column;
+      gap: 1rem;
+    }
+    label {
+      display: flex;
+      flex-direction: column;
+      gap: 0.25rem;
+    }
+    input, textarea, select {
+      padding: 0.5rem;
+      border-radius: 8px;
+      border: none;
+      outline: none;
+      background: #222;
+      color: #fff;
+    }
+    .row {
+      display: flex;
+      gap: 1rem;
+      flex-wrap: wrap;
+    }
+    .col {
+      flex: 1;
+      min-width: 200px;
+    }
+    .small {
+      max-width: 150px;
+    }
+    button {
+      padding: 0.8rem;
+      border: none;
+      background: linear-gradient(90deg, #5ac8fa, #007aff);
+      color: white;
+      font-weight: bold;
+      border-radius: 10px;
+      cursor: pointer;
+      transition: 0.3s;
+    }
+    button:hover {
+      background: linear-gradient(90deg, #0af, #09f);
+    }
+    #msg {
+      text-align: center;
+      margin-top: 1rem;
+      font-size: 0.95rem;
+    }
+    .muted {
+      color: #aaa;
+      font-size: 0.85rem;
+    }
+  </style>
+</head>
+<body>
+  <h1>📖 صفحة رفع المانجا</h1>
+
+  <form id="mangaForm">
+    <h3>معلومات المانجا</h3>
+
+    <label>اسم المانجا
+      <input type="text" id="mangaName" required />
+    </label>
+
+    <label>الوصف
+      <textarea id="mangaDesc" rows="4" placeholder="نبذة عن المانجا..."></textarea>
+    </label>
+
+    <div class="row">
+      <div class="col">
+        <label>الوسوم (مفصولة بفواصل)
+          <input id="mangaTags" placeholder="مثال: شونين, أكشن, كوميديا" />
+        </label>
+      </div>
+      <div class="col small">
+        <label>الفئة العمرية
+          <select id="mangaAge">
+            <option value="all">All</option>
+            <option value="13+">13+</option>
+            <option value="16+">16+</option>
+            <option value="18+">18+</option>
+          </select>
+        </label>
+      </div>
+    </div>
+
+    <label>صورة الغلاف (jpeg/png)
+      <input type="file" id="coverFile" accept="image/*" />
+    </label>
+
+    <h3>إضافة فصل</h3>
+    <div class="row">
+      <div class="col small">
+        <label>رقم الفصل
+          <input type="number" id="chapterNumber" value="1" min="1" required />
+        </label>
+      </div>
+      <div class="col">
+        <label>عنوان الفصل
+          <input id="chapterTitle" placeholder="عنوان الفصل" />
+        </label>
+      </div>
+    </div>
+
+    <label>تاريخ النشر (UTC)
+      <input type="datetime-local" id="publishDate" />
+      <div class="muted">اترك الحقل فارغًا ليتم استخدام الوقت الحالي بالتوقيت العالمي.</div>
+    </label>
+
+    <label>ملف الفصل (PDF)
+      <input type="file" id="chapterFile" accept="application/pdf" required />
+    </label>
+
+    <div>
+      <button type="button" id="submitBtn">💾 حفظ المانجا + الفصل</button>
+    </div>
+
+    <p id="msg" class="muted"></p>
+  </form>
+
+  <script>
+    const APP_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbxZmkmqid6eFyceyjydW0pEFr672qC1JFX877b45z2wNicoivMw3WBxCNRTEdQVByFc/exec";
+
+    function $(id) {
+      return document.getElementById(id);
+    }
+
+    function showMsg(msg, type = "info") {
+      const el = $("msg");
+      el.textContent = msg;
+      el.style.color = type === "error" ? "#f66" : type === "success" ? "#6f6" : "#aaa";
+    }
+
+    async function fileToBase64(file) {
+      if (!file) return null;
+      return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result.split(",")[1]);
+        reader.onerror = reject;
+        reader.readAsDataURL(file);
+      });
+    }
+
+    async function collectForm() {
+      const name = $("mangaName").value.trim();
+      const desc = $("mangaDesc").value.trim();
+      const tags = $("mangaTags").value.split(",").map(t => t.trim()).filter(Boolean);
+      const age = $("mangaAge").value;
+      const cover = await fileToBase64($("coverFile").files[0]);
+
+      const chapterNum = $("chapterNumber").value;
+      const chapterTitle = $("chapterTitle").value.trim();
+      const chapterFile = await fileToBase64($("chapterFile").files[0]);
+      const publishDate = $("publishDate").value || new Date().toISOString();
+
+      return {
+        manga: { name, desc, tags, age, cover, createdAt: new Date().toISOString() },
+        chapter: { number: chapterNum, title: chapterTitle, publishDate, pdf: chapterFile }
+      };
+    }
+
+    $("submitBtn").addEventListener("click", async () => {
+      try {
+        showMsg("يتم التحضير... الرجاء الانتظار");
+        const payload = await collectForm();
+
+        await fetch(APP_SCRIPT_URL, {
+          method: "POST",
+          mode: "no-cors",
+          body: JSON.stringify(payload),
+        });
+
+        showMsg("تم إرسال البيانات إلى الخادم بنجاح ✅", "success");
+        $("mangaForm").reset();
+      } catch (e) {
+        showMsg("حدث خطأ أثناء الإرسال: " + e, "error");
+      }
+    });
+  </script>
+</body>
+</html>
