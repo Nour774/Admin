@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>📖 MangaSanctum | قارئ المانجا</title>
+<style>
+body {
+  font-family: "Segoe UI", Tahoma, sans-serif;
+  background: radial-gradient(circle at top left, #0b0b1a, #101024);
+  color: #eee;
+  margin:0;
+  padding:0;
+}
+header {
+  background: linear-gradient(90deg,#5ac8fa,#007aff);
+  padding:15px;
+  text-align:center;
+  font-size:1.8rem;
+  font-weight:bold;
+  color:#fff;
+}
+.container {max-width:900px;margin:20px auto;padding:10px;}
+.mangaCard {
+  border:1px solid #444;
+  border-radius:12px;
+  padding:15px;
+  margin-bottom:20px;
+  background: rgba(255,255,255,0.03);
+  display:flex;
+  gap:15px;
+}
+.mangaCard img {width:120px;height:160px;border-radius:8px;object-fit:cover;}
+.mangaInfo {flex:1;}
+.mangaInfo h3{margin:0;color:#8ef;}
+.mangaInfo p {margin:5px 0;}
+button {
+  padding:0.5rem 0.8rem;
+  border:none;border-radius:8px;
+  cursor:pointer;font-weight:bold;
+  transition:0.3s;
+  margin-top:5px;
+}
+button.readBtn {background:linear-gradient(90deg,#5ac8fa,#007aff);color:#fff;}
+button.readBtn:hover {background:linear-gradient(90deg,#0af,#09f);}
+.modal {
+  display:none;position:fixed;top:0;left:0;width:100%;height:100%;
+  background:rgba(0,0,0,0.85);justify-content:center;align-items:center;z-index:9999;
+}
+.modalContent {
+  background:#111;padding:20px;border-radius:12px;max-width:90%;max-height:90%;overflow:auto;
+}
+.modalContent h2 {color:#8ef;margin-top:0;}
+.modalContent iframe {width:100%;height:80vh;border:none;border-radius:8px;margin-top:10px;}
+.closeBtn {
+  background:#f55;color:#fff;float:right;padding:5px 10px;border-radius:8px;cursor:pointer;
+}
+</style>
+</head>
+<body>
+
+<header>📖 MangaSanctum</header>
+<div class="container" id="mangaContainer"></div>
+
+<div class="modal" id="readerModal">
+  <div class="modalContent">
+    <button class="closeBtn" id="closeModal">✖ إغلاق</button>
+    <h2 id="readerTitle"></h2>
+    <iframe id="readerFrame"></iframe>
+  </div>
+</div>
+
+<script>
+const APP_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbxTDVXojkUGOHD-9OZhmlP2qvGGUJO0UOpwevSYI1bdacpkAKLfZDS0lT7bcFWsiw32Ow/exec";
+const mangaContainer = document.getElementById("mangaContainer");
+const readerModal = document.getElementById("readerModal");
+const readerTitle = document.getElementById("readerTitle");
+const readerFrame = document.getElementById("readerFrame");
+
+function showMangas(mangas){
+  mangaContainer.innerHTML = "";
+  mangas.forEach(m=>{
+    const card = document.createElement("div");
+    card.className = "mangaCard";
+    card.innerHTML = `
+      <img src="${m.cover || 'https://via.placeholder.com/120x160?text=Manga'}" alt="${m.name}" />
+      <div class="mangaInfo">
+        <h3>${m.name}</h3>
+        <p>${m.description || ''}</p>
+        <p>الأوسمة: ${(m.tags||[]).join(", ")}</p>
+        <p>العمر: ${m.age||'All'}</p>
+        <div id="chapters-${m.name.replace(/\s/g,'_')}"></div>
+      </div>
+    `;
+    mangaContainer.appendChild(card);
+
+    const chContainer = card.querySelector(`#chapters-${m.name.replace(/\s/g,'_')}`);
+    (m.chapters||[]).forEach(ch=>{
+      const btn = document.createElement("button");
+      btn.className = "readBtn";
+      btn.textContent = `📄 الفصل ${ch.number} - ${ch.title}`;
+      btn.addEventListener("click",()=>openChapter(m.name,ch));
+      chContainer.appendChild(btn);
+    });
+  });
+}
+
+// فتح الفصل داخل iframe
+function openChapter(mangaName, chapter){
+  readerTitle.textContent = `${mangaName} - الفصل ${chapter.number} : ${chapter.title}`;
+  readerFrame.src = chapter.fileUrl;
+  readerModal.style.display = "flex";
+
+  // عدّ المشاهدات مرة واحدة لكل مستخدم
+  const key = `viewed_${mangaName}_ch${chapter.number}`;
+  if(!localStorage.getItem(key)){
+    localStorage.setItem(key,true);
+    // إرسال POST لتحديث views (يمكنك تعديل السكربت ليقبل هذا)
+    fetch(APP_SCRIPT_URL,{
+      method:"POST",
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({action:"incrementView",manga:mangaName,chapter:chapter.number})
+    });
+  }
+}
+
+// إغلاق النافذة
+document.getElementById("closeModal").addEventListener("click",()=>{readerModal.style.display="none";readerFrame.src="";});
+
+// تحميل كل المانجات
+async function loadAllMangas(){
+  try{
+    const res = await fetch(APP_SCRIPT_URL+"?action=list");
+    const list = await res.json();
+    const mangas=[];
+    for(const m of list.mangas){
+      const res2 = await fetch(APP_SCRIPT_URL+"?action=get&manga="+encodeURIComponent(m.name));
+      const data = await res2.json();
+      // تحويل صورة الغلاف من Base64 إن وجدت
+      if(data.cover) data.cover = `data:image/png;base64,${data.cover}`;
+      mangas.push(data);
+    }
+    showMangas(mangas);
+  }catch(e){console.log("خطأ تحميل المانجات:",e);}
+}
+
+loadAllMangas();
+</script>
+</body>
+</html>
