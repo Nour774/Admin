@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>إضافة مانجا جديدة | MangaSanctum</title>
+
+  <style>
+    body {
+      font-family: "Segoe UI", Tahoma, sans-serif;
+      background: radial-gradient(circle at top left, #1b1b2f, #151515);
+      color: #eee;
+      max-width: 800px;
+      margin: 40px auto;
+      padding: 20px;
+      border-radius: 16px;
+      box-shadow: 0 0 20px rgba(0, 0, 0, 0.4);
+    }
+    h1, h3 { color: #8ef; text-align: center; }
+    form { display: flex; flex-direction: column; gap: 1rem; }
+    label { display: flex; flex-direction: column; gap: 0.25rem; }
+    input, textarea, select {
+      padding: 0.5rem; border-radius: 8px; border: none;
+      background: #222; color: #fff;
+    }
+    button {
+      padding: 0.8rem; border: none;
+      background: linear-gradient(90deg, #5ac8fa, #007aff);
+      color: white; font-weight: bold; border-radius: 10px;
+      cursor: pointer; transition: 0.3s;
+    }
+    button:hover { background: linear-gradient(90deg, #0af, #09f); }
+    #msg { text-align: center; margin-top: 1rem; font-size: 0.95rem; }
+    .muted { color: #aaa; font-size: 0.85rem; }
+  </style>
+</head>
+
+<body>
+<h1>📘 إضافة مانجا جديدة</h1>
+
+<form id="mangaForm">
+
+  <label>اسم المانجا
+    <input type="text" id="mangaName" required />
+  </label>
+
+  <label>الوصف
+    <textarea id="mangaDesc" rows="4"></textarea>
+  </label>
+
+  <label>الوسوم (مفصولة بفواصل)
+    <input id="mangaTags" placeholder="شونين, أكشن, غموض" />
+  </label>
+
+  <label>الفئة العمرية
+    <select id="mangaAge">
+      <option value="all">All</option>
+      <option value="13+">13+</option>
+      <option value="16+">16+</option>
+      <option value="18+">18+</option>
+    </select>
+  </label>
+
+  <label>صورة الغلاف (jpeg/png)
+    <input type="file" id="coverFile" accept="image/*" />
+  </label>
+
+  <button type="button" id="submitBtn">📥 إضافة المانجا</button>
+  <p id="msg" class="muted"></p>
+
+</form>
+
+<script>
+const APP_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbw8Z-pmgoDo7NMHBY7EfSYNzCsmamAJc3F7UXM76SZC5DxPMCRvaLh9FDMnbnyk-sIe/exec";
+
+function $(id){ return document.getElementById(id); }
+
+async function fileToBase64(file){
+  if(!file) return null;
+  return new Promise((resolve,reject)=>{
+    const r=new FileReader();
+    r.onload=()=>resolve(r.result.split(",")[1]);
+    r.onerror=reject;
+    r.readAsDataURL(file);
+  });
+}
+
+$("submitBtn").addEventListener("click", async ()=>{
+
+  const name = $("mangaName").value.trim();
+  if(!name) return $("msg").textContent="❌ الرجاء إدخال الاسم";
+
+  $("msg").textContent = "⏳ جاري الإرسال...";
+
+  const payload = {
+    action: "create-manga",
+    manga: {
+      name,
+      desc: $("mangaDesc").value.trim(),
+      tags: $("mangaTags").value.split(",").map(t=>t.trim()).filter(Boolean),
+      age: $("mangaAge").value,
+      cover: await fileToBase64($("coverFile").files[0]),
+      createdAt: new Date().toISOString()
+    }
+  };
+
+  await fetch(APP_SCRIPT_URL,{
+    method:"POST",
+    mode:"no-cors",
+    body:JSON.stringify(payload)
+  });
+
+  $("msg").textContent = "✔ تمت إضافة المانجا بنجاح";
+  $("mangaForm").reset();
+});
+</script>
+
+</body>
+</html>
