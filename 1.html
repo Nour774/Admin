@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<title>إضافة فصل | MangaSanctum</title>
+
+<style>
+  body {
+    font-family: "Segoe UI";
+    background: #141421;
+    color: #eee;
+    max-width: 750px;
+    margin: 40px auto;
+    padding: 20px;
+    border-radius: 16px;
+    box-shadow: 0 0 20px rgba(0,0,0,.4);
+  }
+
+  h1 { color:#8ef; text-align:center; }
+
+  input, select {
+    padding: .6rem;
+    border: none;
+    border-radius: 8px;
+    background: #222;
+    color:white;
+    width:100%;
+  }
+
+  #results {
+    background:#1a1a1a;
+    border-radius:8px;
+    margin-top:5px;
+    max-height:300px;
+    overflow-y:auto;
+  }
+
+  .item {
+    display:flex;
+    align-items:center;
+    gap:12px;
+    padding:8px;
+    cursor:pointer;
+    border-bottom:1px solid #333;
+  }
+
+  .item:hover { background:#333; }
+
+  .cover {
+    width:60px;
+    height:80px;
+    object-fit:cover;
+    border-radius:6px;
+  }
+
+  button {
+    padding:.8rem;
+    border:none;
+    background:linear-gradient(90deg,#5ac8fa,#007aff);
+    color:white;
+    border-radius:10px;
+    cursor:pointer;
+    margin-top:20px;
+  }
+
+  #msg { margin-top:1rem; text-align:center; }
+</style>
+</head>
+<body>
+
+<h1>📖 إضافة فصل جديد</h1>
+
+<label>ابحث عن مانجا</label>
+<input type="text" id="search" placeholder="اكتب اسم المانجا...">
+<div id="results"></div>
+
+<br>
+
+<label>رقم الفصل</label>
+<input type="number" id="chapterNum" min="1" value="1">
+
+<label>عنوان الفصل</label>
+<input type="text" id="chapterTitle">
+
+<label>ملف الفصل (أي نوع)</label>
+<input type="file" id="chapterFile" accept="*/*">
+
+<button id="btnUpload">رفع الفصل</button>
+
+<p id="msg"></p>
+
+<script>
+const API = "https://script.google.com/macros/s/AKfycbw8Z-pmgoDo7NMHBY7EfSYNzCsmamAJc3F7UXM76SZC5DxPMCRvaLh9FDMnbnyk-sIe/exec";
+
+// سيتم وضع قائمة المانجا من Apps Script
+let allManga = [];
+let selectedManga = null;
+
+// ========== جلب قائمة المانجا ==========
+async function loadMangaList() {
+  try {
+    const res = await fetch(API + "?action=getMangaList");
+    const json = await res.json();
+    allManga = json.list || [];
+  } catch(e) {
+    console.error(e);
+  }
+}
+loadMangaList();
+
+// ========== دالة مختصرة ==========
+function $(id){ return document.getElementById(id); }
+
+// ========== تحديث نتائج البحث ==========
+$("search").oninput = function(){
+  const q = this.value.trim().toLowerCase();
+  const box = $("results");
+  box.innerHTML = "";
+
+  if (!q) return;
+
+  allManga
+    .filter(m => m.name.toLowerCase().includes(q))
+    .forEach(m => {
+      const item = document.createElement("div");
+      item.className = "item";
+
+      const img = document.createElement("img");
+      img.className = "cover";
+      img.src = m.cover;     // رابط الغلاف من Apps Script
+
+      const title = document.createElement("div");
+      title.textContent = m.name;
+
+      item.appendChild(img);
+      item.appendChild(title);
+
+      item.onclick = () => {
+        selectedManga = m.name;
+        $("search").value = m.name;
+        box.innerHTML = "";
+      };
+
+      box.appendChild(item);
+    });
+};
+
+// ========== تحويل الملف Base64 ==========
+function toBase64(file){
+  return new Promise(res=>{
+    const r = new FileReader();
+    r.onload=()=>res(r.result.split(",")[1]);
+    r.readAsDataURL(file);
+  });
+}
+
+// ========== رفع الفصل ==========
+$("btnUpload").onclick = async () => {
+  if (!selectedManga) {
+    $("msg").textContent = "❗ اختر مانجا أولاً";
+    return;
+  }
+
+  $("msg").textContent = "⏳ جاري الرفع...";
+
+  const file = $("chapterFile").files[0];
+  const b64 = file ? await toBase64(file) : null;
+
+  const payload = {
+    action: "addChapter",
+    mangaName: selectedManga,
+    chapter: {
+      number: $("chapterNum").value,
+      title: $("chapterTitle").value.trim(),
+      mime: file.type,
+      originalName: file.name,
+      publishDate: new Date().toISOString(),
+      file: b64
+    }
+  };
+
+  await fetch(API, {
+    method:"POST",
+    mode:"no-cors",
+    body: JSON.stringify(payload)
+  });
+
+  $("msg").textContent = "✔️ تم رفع الفصل بنجاح!";
+};
+</script>
+
+</body>
+</html>
