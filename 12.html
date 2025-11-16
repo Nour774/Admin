@@ -81,7 +81,7 @@ uploadBtn.addEventListener("click", async () => {
   form.append("cover", file);
 
   try {
-    const res = await fetch("https://script.google.com/macros/s/AKfycbywf0L4Rn09fxWlIJpQ9tqgYAi9c4ecyPF9Ls5NQ_h0p1uxOagrusZZHJdmI_dLo19dkA/exec", { method:"POST", body: form });
+    const res = await fetch("https://script.google.com/macros/s/AKfycbzABDDCxl6p2e1L3PnB-HLwNA-S5qSl3r7Vt1RoDpn-gxWdRI7-rVL_3bf4HYz1Gt4ezA/exec", { method:"POST", body: form });
     const data = await res.json();
 
     if(data.status === "success"){
