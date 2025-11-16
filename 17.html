@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<title>إضافة مانجا | MangaSanctum</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<style>
+body { margin:0; padding:0; background: radial-gradient(circle at top,#1c1b29,#0e0d16); font-family:"Segoe UI",sans-serif; color:#eee; }
+.container { max-width:600px; margin:40px auto; padding:25px; backdrop-filter:blur(18px); background: rgba(255,255,255,0.06); border:1px solid rgba(255,255,255,0.12); border-radius:18px; box-shadow:0 0 25px rgba(120,80,255,0.25); }
+@media(max-width:650px){ .container{ margin:20px; padding:20px; } }
+h1 { font-weight:normal; text-align:center; color:#bbaaff; letter-spacing:1px; }
+label { margin-top:15px; display:block; opacity:0.9; }
+input, textarea { width:100%; background: rgba(255,255,255,0.08); border:1px solid rgba(255,255,255,0.15); border-radius:10px; padding:10px; color:#eee; margin-top:8px; transition:0.3s; }
+input:focus, textarea:focus { border-color:#8b70ff; box-shadow:0 0 0 3px rgba(140,120,255,0.25); outline:none; }
+button { width:100%; margin-top:25px; padding:12px; font-size:17px; background:linear-gradient(135deg,#7d5cff,#6140ff); border:none; border-radius:12px; color:#fff; cursor:pointer; transition:0.3s; font-weight:bold; }
+button:disabled { opacity:0.4; cursor:not-allowed; }
+#status { margin-top:15px; text-align:center; color:#ccbaff; font-weight:bold; }
+#coverPreview { margin-top:12px; max-width:100%; max-height:180px; border-radius:12px; object-fit:cover; display:none; }
+</style>
+</head>
+<body>
+
+<div class="container">
+  <h1>إضافة مانجا جديدة</h1>
+
+  <label>اسم المانجا</label>
+  <input id="mangaName" type="text">
+
+  <label>الوصف</label>
+  <textarea id="mangaDesc" rows="4"></textarea>
+
+  <label>العمر المناسب</label>
+  <input id="mangaAge" type="text" placeholder="مثال: 13+">
+
+  <label>الوسوم (مفصولة بفواصل)</label>
+  <input id="mangaTags" type="text">
+
+  <label>غلاف المانجا</label>
+  <input id="coverFile" type="file" accept="image/*">
+  <img id="coverPreview">
+
+  <button id="uploadBtn">إضافة المانجا</button>
+  <div id="status"></div>
+</div>
+
+<script>
+const mangaName = document.getElementById("mangaName");
+const mangaDesc = document.getElementById("mangaDesc");
+const mangaAge = document.getElementById("mangaAge");
+const mangaTags = document.getElementById("mangaTags");
+const coverFile = document.getElementById("coverFile");
+const coverPreview = document.getElementById("coverPreview");
+const uploadBtn = document.getElementById("uploadBtn");
+const status = document.getElementById("status");
+
+// عرض الغلاف عند الاختيار
+coverFile.addEventListener("change", () => {
+  const file = coverFile.files[0];
+  if(file){
+    const reader = new FileReader();
+    reader.onload = e => {
+      coverPreview.src = e.target.result;
+      coverPreview.style.display = "block";
+    };
+    reader.readAsDataURL(file);
+  } else {
+    coverPreview.style.display = "none";
+  }
+});
+
+uploadBtn.addEventListener("click", async () => {
+  const name = mangaName.value.trim();
+  const desc = mangaDesc.value.trim();
+  const age = mangaAge.value.trim();
+  const tags = mangaTags.value.trim();
+  const file = coverFile.files[0];
+
+  if(!name || !file){
+    status.innerHTML = "⚠️ الرجاء ملء الاسم والغلاف.";
+    return;
+  }
+
+  uploadBtn.disabled = true;
+  status.innerHTML = "⏳ جاري الرفع...";
+
+  const formData = new FormData();
+  formData.append("name", name);
+  formData.append("desc", desc);
+  formData.append("age", age);
+  formData.append("tags", tags);
+  formData.append("cover", file);
+
+  try {
+    const res = await fetch("https://script.google.com/macros/s/AKfycbyqWsgsjJ5qrRzsO5UavIYx69-MSevdQlZTmZYLOxG1Ogrozt78oLS5dtMcZFqf0cXIfw/exec", {
+      method: "POST",
+      body: formData
+    });
+    const data = await res.json();
+    if(data.status === "success"){
+      status.innerHTML = data.message;
+      mangaName.value = "";
+      mangaDesc.value = "";
+      mangaAge.value = "";
+      mangaTags.value = "";
+      coverFile.value = "";
+      coverPreview.style.display = "none";
+    } else {
+      status.innerHTML = "❌ " + (data.message || "خطأ غير معروف");
+    }
+  } catch(err){
+    status.innerHTML = "❌ حدث خطأ أثناء الاتصال.";
+  } finally {
+    uploadBtn.disabled = false;
+  }
+});
+</script>
+
+</body>
+</html>
