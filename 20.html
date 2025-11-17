@@ -17,16 +17,16 @@
     display:flex;
     align-items:center;
     gap:10px;
-    transition:0.2s
+    transition:0.2s;
   }
-  .manga-item:hover{background:rgba(140,120,255,0.15)}
-  .manga-item.selected{background:rgba(140,120,255,0.3)}
-
+  .manga-item:hover{background:rgba(140,120,255,0.15);}
+  .manga-item.selected{background:rgba(140,120,255,0.3);}
   .manga-item img{
     width:40px;
     height:55px;
     border-radius:4px;
     object-fit:cover;
+    flex-shrink:0;
   }
 
   label{display:block;margin-top:15px;}
@@ -46,7 +46,7 @@
   <label>رقم الفصل</label>
   <input id="chapterNumber" type="text">
 
-  <label>اسم الفصل</label>
+  <label>عنوان الفصل</label>
   <input id="chapterName" type="text">
 
   <label>ملف الفصل (PDF / ZIP / DOCX / صور...)</label>
@@ -64,12 +64,19 @@ const searchBox = document.getElementById("searchBox");
 const uploadBtn = document.getElementById("uploadBtn");
 const statusDiv = document.getElementById("status");
 
-// تحويل رابط Google Drive إلى رابط مباشر
+// تحويل أي رابط Google Drive إلى رابط مباشر صالح للعرض
 function convertDriveLink(url){
-  let match = url.match(/\/d\/(.*?)\//);
-  if(match && match[1]){
-    return `https://drive.google.com/uc?export=view&id=${match[1]}`;
-  }
+  if(!url) return "";
+
+  // حالة الروابط القديمة /view
+  let match1 = url.match(/\/d\/(.*?)\/view/);
+  if(match1 && match1[1]) return `https://drive.google.com/uc?export=view&id=${match1[1]}`;
+
+  // حالة روابط drive.usercontent.google.com
+  let match2 = url.match(/id=([a-zA-Z0-9_-]+)/);
+  if(match2 && match2[1]) return `https://drive.google.com/uc?export=view&id=${match2[1]}`;
+
+  // رابط مباشر بالفعل أو غير معروف
   return url;
 }
 
@@ -88,7 +95,7 @@ searchBox.addEventListener("input", ()=>{
 
       if(cover){
         let direct = convertDriveLink(cover);
-        div.innerHTML = `<img src="${direct}"><span>${name}</span>`;
+        div.innerHTML = `<img src="${direct}" alt="غلاف"><span>${name}</span>`;
       } else {
         div.innerHTML = `<span>${name}</span>`;
       }
