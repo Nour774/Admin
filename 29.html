@@ -28,10 +28,27 @@
     box-shadow:0 0 25px rgba(120,80,255,0.25);
     animation:fadein 0.6s ease;
   }
-  @keyframes fadein{from{opacity:0;transform:translateY(12px);}to{opacity:1;transform:translateY(0);}}
+  @keyframes fadein {
+    from {opacity:0;transform:translateY(12px);}
+    to {opacity:1;transform:translateY(0);}
+  }
   h1{text-align:center;color:#bbaaff;font-weight:normal;font-size:1.6em;}
-  #searchBox{width:100%;background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.15);border-radius:10px;padding:10px;color:#eee;margin-bottom:12px;}
-  #mangaList{max-height:250px;overflow-y:auto;margin-bottom:20px;border-radius:12px;border:1px solid rgba(255,255,255,0.12);}
+  #searchBox{
+    width:100%;
+    background:rgba(255,255,255,0.08);
+    border:1px solid rgba(255,255,255,0.15);
+    border-radius:10px;
+    padding:10px;
+    color:#eee;
+    margin-bottom:12px;
+  }
+  #mangaList{
+    max-height:250px;
+    overflow-y:auto;
+    margin-bottom:20px;
+    border-radius:12px;
+    border:1px solid rgba(255,255,255,0.12);
+  }
   .manga-item{
     padding:8px;
     cursor:pointer;
@@ -49,10 +66,23 @@
     object-fit:cover;
     flex-shrink:0;
   }
-
   label{display:block;margin-top:15px;font-size:0.9em;}
-  input,textarea{width:100%;background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.15);border-radius:10px;padding:10px;color:#eee;margin-top:8px;transition:0.3s;font-size:0.9em;}
-  input:focus,textarea:focus{border-color:#8b70ff;box-shadow:0 0 0 3px rgba(140,120,255,0.25);outline:none;}
+  input,textarea{
+    width:100%;
+    background:rgba(255,255,255,0.08);
+    border:1px solid rgba(255,255,255,0.15);
+    border-radius:10px;
+    padding:10px;
+    color:#eee;
+    margin-top:8px;
+    transition:0.3s;
+    font-size:0.9em;
+  }
+  input:focus,textarea:focus{
+    border-color:#8b70ff;
+    box-shadow:0 0 0 3px rgba(140,120,255,0.25);
+    outline:none;
+  }
   button{
     width:100%;
     margin-top:25px;
@@ -70,9 +100,11 @@
   #status{margin-top:15px;text-align:center;color:#ccbaff;font-size:0.9em;}
 </style>
 </head>
+
 <body>
 <div class="container">
   <h1>إضافة فصل جديد</h1>
+
   <input id="searchBox" type="text" placeholder="ابحث عن المانجا">
   <div id="mangaList"></div>
 
@@ -92,12 +124,13 @@
 <script>
 let mangaData = [];
 let selectedManga = null;
+
 const mangaListDiv = document.getElementById("mangaList");
 const searchBox = document.getElementById("searchBox");
 const uploadBtn = document.getElementById("uploadBtn");
 const statusDiv = document.getElementById("status");
 
-// تحويل أي رابط Google Drive إلى رابط عرض مباشر
+// تحويل رابط Google Drive إلى رابط مباشر
 function convertDriveLink(url){
   if(!url) return "";
   let match1 = url.match(/\/d\/(.*?)\/view/);
@@ -107,15 +140,19 @@ function convertDriveLink(url){
   return url;
 }
 
-// البحث الفوري وعرض الصور المصغرة
+// البحث
 searchBox.addEventListener("input", ()=>{
   const val = searchBox.value.trim().toLowerCase();
   mangaListDiv.innerHTML = "";
   if(val.length===0) return;
 
   mangaData.forEach(item=>{
-    let name = typeof item==="string"?item:item.name;
-    let cover = typeof item==="string"? "": item.cover;
+    if(!item) return;
+
+    let name = typeof item==="string" ? item : item.name;
+    let cover = typeof item==="string" ? "" : item.cover;
+
+    if(!name || typeof name !== "string") return;
 
     if(name.toLowerCase().includes(val)){
       const div = document.createElement("div");
@@ -141,16 +178,16 @@ searchBox.addEventListener("input", ()=>{
   });
 });
 
-// جلب قائمة المانجا عند تحميل الصفحة
+// جلب قائمة المانجا
 fetch("https://script.google.com/macros/s/AKfycbz9IdPuRJynYuPywI_fdVX8exdg4v5gjQqRdDNUSNMAsgb-2ie7O3NdElCyi-Eo8wlR/exec?action=getMangaList")
   .then(r=>r.json())
   .then(data=>{
-    if(data && data.list) mangaData = data.list;
-    else console.warn("البيانات خاطئة من السكربت:", data);
+    if(data && Array.isArray(data.list)) mangaData = data.list;
+    else console.warn("البيانات غير صالحة من السكربت:", data);
   })
-  .catch(err=>console.error("خطأ في جلب المانجا:", err));
+  .catch(err=>console.error("فشل جلب المانجا:", err));
 
-// رفع الفصل، عنوان الفصل اختياري
+// رفع الفصل
 uploadBtn.addEventListener("click", ()=>{
   if(!selectedManga){
     statusDiv.innerHTML="⚠️ اختر مانجا أولاً";
@@ -162,7 +199,7 @@ uploadBtn.addEventListener("click", ()=>{
   const file = document.getElementById("chapterFile").files[0];
 
   if(!num || !file){
-    statusDiv.innerHTML="⚠️ الرجاء ملء رقم الفصل واختيار الملف";
+    statusDiv.innerHTML="⚠️ الرجاء إدخال رقم الفصل واختيار الملف";
     return;
   }
 
@@ -199,5 +236,6 @@ uploadBtn.addEventListener("click", ()=>{
   });
 });
 </script>
+
 </body>
 </html>
