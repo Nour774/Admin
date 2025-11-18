@@ -142,7 +142,7 @@ searchBox.addEventListener("input", ()=>{
 });
 
 // جلب قائمة المانجا عند تحميل الصفحة
-fetch("https://script.google.com/macros/s/AKfycbwxZw8IVfukE2oGLSUdqGQi-jQs9lW31cv9xN56dL46SXEPmPLefd3Qyob0KEyuozyU/exec?action=getMangaList")
+fetch("https://script.google.com/macros/s/AKfycbz9IdPuRJynYuPywI_fdVX8exdg4v5gjQqRdDNUSNMAsgb-2ie7O3NdElCyi-Eo8wlR/exec?action=getMangaList")
   .then(r=>r.json())
   .then(data=>{
     if(data && data.list) mangaData = data.list;
@@ -176,7 +176,7 @@ uploadBtn.addEventListener("click", ()=>{
   if(title) form.append("title",title);
   form.append("file",file);
 
-  fetch("https://script.google.com/macros/s/AKfycbwxZw8IVfukE2oGLSUdqGQi-jQs9lW31cv9xN56dL46SXEPmPLefd3Qyob0KEyuozyU/exec",{
+  fetch("https://script.google.com/macros/s/AKfycbz9IdPuRJynYuPywI_fdVX8exdg4v5gjQqRdDNUSNMAsgb-2ie7O3NdElCyi-Eo8wlR/exec",{
     method:"POST",
     body:form
   })
