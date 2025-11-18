@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<title>إضافة فصل | MangaSanctum</title>
+<style>
+  body{margin:0;padding:0;background:radial-gradient(circle at top,#1c1b29,#0e0d16);font-family:"Segoe UI",sans-serif;color:#eee}
+  .container{max-width:650px;margin:50px auto;padding:25px;backdrop-filter:blur(18px);background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.12);border-radius:18px;box-shadow:0 0 25px rgba(120,80,255,0.25);animation:fadein 0.6s ease}
+  @keyframes fadein{from{opacity:0;transform:translateY(12px);}to{opacity:1;transform:translateY(0);}}
+  h1{text-align:center;color:#bbaaff;font-weight:normal;}
+  #searchBox{width:100%;background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.15);border-radius:10px;padding:10px;color:#eee;margin-bottom:12px;}
+  #mangaList{max-height:250px;overflow-y:auto;margin-bottom:20px;border-radius:12px;border:1px solid rgba(255,255,255,0.12);}
+
+  .manga-item{
+    padding:8px;
+    cursor:pointer;
+    display:flex;
+    align-items:center;
+    gap:10px;
+    transition:0.2s;
+  }
+  .manga-item:hover{background:rgba(140,120,255,0.15);}
+  .manga-item.selected{background:rgba(140,120,255,0.3);}
+  .manga-item img{
+    width:50px;
+    height:65px;
+    border-radius:6px;
+    object-fit:cover;
+    flex-shrink:0;
+  }
+
+  label{display:block;margin-top:15px;}
+  input,textarea{width:100%;background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.15);border-radius:10px;padding:10px;color:#eee;margin-top:8px;transition:0.3s;}
+  input:focus,textarea:focus{border-color:#8b70ff;box-shadow:0 0 0 3px rgba(140,120,255,0.25);outline:none;}
+  button{width:100%;margin-top:25px;padding:12px;font-size:17px;background:linear-gradient(135deg,#7d5cff,#6140ff);border:none;border-radius:12px;color:#fff;cursor:pointer;transition:0.3s;font-weight:bold;}
+  button:disabled{opacity:0.4;cursor:not-allowed;}
+  #status{margin-top:15px;text-align:center;color:#ccbaff;}
+</style>
+</head>
+<body>
+<div class="container">
+  <h1>إضافة فصل جديد</h1>
+  <input id="searchBox" type="text" placeholder="ابحث عن المانجا">
+  <div id="mangaList"></div>
+
+  <label>رقم الفصل</label>
+  <input id="chapterNumber" type="text">
+
+  <label>عنوان الفصل</label>
+  <input id="chapterName" type="text">
+
+  <label>ملف الفصل (PDF / ZIP / DOCX / صور...)</label>
+  <input id="chapterFile" type="file">
+
+  <button id="uploadBtn">رفع الفصل</button>
+  <div id="status"></div>
+</div>
+
+<script>
+let mangaData = [];
+let selectedManga = null;
+const mangaListDiv = document.getElementById("mangaList");
+const searchBox = document.getElementById("searchBox");
+const uploadBtn = document.getElementById("uploadBtn");
+const statusDiv = document.getElementById("status");
+
+// تحويل أي رابط Google Drive إلى رابط عرض مباشر
+function convertDriveLink(url){
+  if(!url) return "";
+
+  // روابط /view
+  let match1 = url.match(/\/d\/(.*?)\/view/);
+  if(match1 && match1[1]) return `https://lh3.googleusercontent.com/d/${match1[1]}`;
+
+  // روابط تحتوي على ?id=
+  let match2 = url.match(/id=([a-zA-Z0-9_-]+)/);
+  if(match2 && match2[1]) return `https://lh3.googleusercontent.com/d/${match2[1]}`;
+
+  // رابط مباشر أو غير معروف
+  return url;
+}
+
+// تحديث القائمة فور الكتابة
+searchBox.addEventListener("input", ()=>{
+  const val = searchBox.value.trim().toLowerCase();
+  mangaListDiv.innerHTML = "";
+  if(val.length===0) return;
+
+  mangaData.forEach(item=>{
+    let name = typeof item==="string"?item:item.name;
+    let cover = typeof item==="string"? "": item.cover;
+
+    if(name.toLowerCase().includes(val)){
+      const div = document.createElement("div");
+      div.className = "manga-item";
+
+      if(cover){
+        let direct = convertDriveLink(cover);
+        div.innerHTML = `<img src="${direct}" alt="غلاف"><span>${name}</span>`;
+      } else {
+        div.innerHTML = `<span>${name}</span>`;
+      }
+
+      div.onclick = ()=>{
+        document.querySelectorAll(".manga-item").forEach(i=>i.classList.remove("selected"));
+        div.classList.add("selected");
+        selectedManga = name;
+        searchBox.value = name;
+        mangaListDiv.innerHTML = "";
+      };
+
+      mangaListDiv.appendChild(div);
+    }
+  });
+});
+
+// جلب قائمة المانجا عند تحميل الصفحة
+fetch("https://script.google.com/macros/s/AKfycbzzCaiSaEmiR3XA_W-cfu7AlAmz1btcrx8QqlAGI4xSXrbpH41BC-9l89opPV3QbR2UDQ/exec?action=getMangaList")
+  .then(r=>r.json())
+  .then(data=>{
+    if(data && data.list) mangaData = data.list;
+    else console.warn("البيانات خاطئة من السكربت:", data);
+  })
+  .catch(err=>console.error("خطأ في جلب المانجا:", err));
+
+// رفع الفصل
+uploadBtn.addEventListener("click", ()=>{
+  if(!selectedManga){
+    statusDiv.innerHTML="⚠️ اختر مانجا أولاً";
+    return;
+  }
+
+  const num = document.getElementById("chapterNumber").value.trim();
+  const title = document.getElementById("chapterName").value.trim();
+  const file = document.getElementById("chapterFile").files[0];
+
+  if(!num || !title || !file){
+    statusDiv.innerHTML="⚠️ الرجاء ملء كل الحقول";
+    return;
+  }
+
+  uploadBtn.disabled = true;
+  statusDiv.innerHTML = "⏳ جاري الرفع...";
+
+  const form = new FormData();
+  form.append("action","addChapter");
+  form.append("manga",selectedManga);
+  form.append("number",num);
+  form.append("title",title);
+  form.append("file",file);
+
+  fetch("https://script.google.com/macros/s/AKfycbzzCaiSaEmiR3XA_W-cfu7AlAmz1btcrx8QqlAGI4xSXrbpH41BC-9l89opPV3QbR2UDQ/exec",{
+    method:"POST",
+    body:form
+  })
+  .then(r=>r.json())
+  .then(data=>{
+    if(data.status==="success"){
+      statusDiv.innerHTML="✔️ تم رفع الفصل بنجاح!";
+      document.getElementById("chapterNumber").value="";
+      document.getElementById("chapterName").value="";
+      document.getElementById("chapterFile").value="";
+    } else {
+      statusDiv.innerHTML="❌ خطأ: "+data.message;
+    }
+    uploadBtn.disabled=false;
+  })
+  .catch(err=>{
+    console.error(err);
+    statusDiv.innerHTML="❌ فشل الاتصال";
+    uploadBtn.disabled=false;
+  });
+});
+</script>
+</body>
+</html>
